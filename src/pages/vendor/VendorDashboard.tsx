@@ -106,10 +106,19 @@ const VendorDashboard: React.FC<VendorDashboardProps> = ({ vendor }) => {
         .from('vendor_coupons')
         .select('coupon_code')
         .eq('vendor_id', vendor.id)
-        .single();
-
-      if (error && error.code !== 'PGRST116') throw error;
-      setCouponCode(data?.coupon_code || null);
+        .maybeSingle();
+  
+      if (error) {
+        if (error.code === 'PGRST116') {
+          console.log('No coupon found for vendor:', vendor.id); // Debug log
+          setCouponCode(null);
+        } else {
+          console.error('Error loading coupon:', error);
+          throw error;
+        }
+      } else {
+        setCouponCode(data?.coupon_code || null);
+      }
     } catch (error) {
       console.error('Error loading coupon:', error);
       setCouponCode(null);

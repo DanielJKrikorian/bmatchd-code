@@ -25,8 +25,8 @@ A modern wedding marketplace platform connecting couples with wedding vendors.
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/DanielJKrikorian/manual.git
-cd manual
+git clone https://github.com/DanielJKrikorian/bmatchd-code.git
+cd bmatchd-code
 ```
 
 2. Install dependencies:
