@@ -1,0 +1,122 @@
+-- Add more US cities grouped by state
+INSERT INTO cities (name, state) VALUES
+  -- California
+  ('Long Beach', 'California'),
+  ('Fresno', 'California'),
+  ('Santa Barbara', 'California'),
+  ('Anaheim', 'California'),
+  ('Irvine', 'California'),
+  ('San Bernardino', 'California'),
+  ('Riverside', 'California'),
+  ('Santa Cruz', 'California'),
+  ('Palm Springs', 'California'),
+  ('Napa', 'California'),
+  
+  -- Texas
+  ('Arlington', 'Texas'),
+  ('Corpus Christi', 'Texas'),
+  ('Plano', 'Texas'),
+  ('Lubbock', 'Texas'),
+  ('Irving', 'Texas'),
+  ('Laredo', 'Texas'),
+  ('Amarillo', 'Texas'),
+  ('Galveston', 'Texas'),
+  ('Waco', 'Texas'),
+  ('College Station', 'Texas'),
+  
+  -- Florida
+  ('St. Petersburg', 'Florida'),
+  ('Fort Lauderdale', 'Florida'),
+  ('West Palm Beach', 'Florida'),
+  ('Gainesville', 'Florida'),
+  ('Clearwater', 'Florida'),
+  ('Daytona Beach', 'Florida'),
+  ('Fort Myers', 'Florida'),
+  ('Pensacola', 'Florida'),
+  ('Key West', 'Florida'),
+  ('Naples', 'Florida'),
+  
+  -- New York
+  ('Rochester', 'New York'),
+  ('Syracuse', 'New York'),
+  ('Yonkers', 'New York'),
+  ('Ithaca', 'New York'),
+  ('Poughkeepsie', 'New York'),
+  ('Saratoga Springs', 'New York'),
+  ('White Plains', 'New York'),
+  ('Niagara Falls', 'New York'),
+  ('Montauk', 'New York'),
+  ('Lake Placid', 'New York'),
+  
+  -- Illinois
+  ('Aurora', 'Illinois'),
+  ('Rockford', 'Illinois'),
+  ('Joliet', 'Illinois'),
+  ('Naperville', 'Illinois'),
+  ('Springfield', 'Illinois'),
+  ('Peoria', 'Illinois'),
+  ('Champaign', 'Illinois'),
+  ('Bloomington', 'Illinois'),
+  ('Evanston', 'Illinois'),
+  ('Oak Park', 'Illinois'),
+  
+  -- Washington
+  ('Tacoma', 'Washington'),
+  ('Vancouver', 'Washington'),
+  ('Bellevue', 'Washington'),
+  ('Everett', 'Washington'),
+  ('Olympia', 'Washington'),
+  ('Bellingham', 'Washington'),
+  ('Yakima', 'Washington'),
+  ('Walla Walla', 'Washington'),
+  ('Port Angeles', 'Washington'),
+  ('Leavenworth', 'Washington'),
+  
+  -- Colorado
+  ('Colorado Springs', 'Colorado'),
+  ('Aurora', 'Colorado'),
+  ('Fort Collins', 'Colorado'),
+  ('Boulder', 'Colorado'),
+  ('Aspen', 'Colorado'),
+  ('Vail', 'Colorado'),
+  ('Telluride', 'Colorado'),
+  ('Steamboat Springs', 'Colorado'),
+  ('Breckenridge', 'Colorado'),
+  ('Durango', 'Colorado'),
+  
+  -- Massachusetts
+  ('Worcester', 'Massachusetts'),
+  ('Springfield', 'Massachusetts'),
+  ('Cambridge', 'Massachusetts'),
+  ('Cape Cod', 'Massachusetts'),
+  ('Salem', 'Massachusetts'),
+  ('Plymouth', 'Massachusetts'),
+  ('Northampton', 'Massachusetts'),
+  ('Amherst', 'Massachusetts'),
+  ('Nantucket', 'Massachusetts'),
+  ('Martha''s Vineyard', 'Massachusetts'),
+  
+  -- Michigan
+  ('Grand Rapids', 'Michigan'),
+  ('Ann Arbor', 'Michigan'),
+  ('Lansing', 'Michigan'),
+  ('Flint', 'Michigan'),
+  ('Kalamazoo', 'Michigan'),
+  ('Traverse City', 'Michigan'),
+  ('Mackinac Island', 'Michigan'),
+  ('Saugatuck', 'Michigan'),
+  ('Holland', 'Michigan'),
+  ('Frankenmuth', 'Michigan'),
+  
+  -- Hawaii
+  ('Honolulu', 'Hawaii'),
+  ('Hilo', 'Hawaii'),
+  ('Kailua', 'Hawaii'),
+  ('Lahaina', 'Hawaii'),
+  ('Kihei', 'Hawaii'),
+  ('Kona', 'Hawaii'),
+  ('Waimea', 'Hawaii'),
+  ('Kahului', 'Hawaii'),
+  ('Kapaa', 'Hawaii'),
+  ('Paia', 'Hawaii')
+ON CONFLICT (name, state, country) DO NOTHING;
