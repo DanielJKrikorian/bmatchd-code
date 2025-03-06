@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # WeddingHub
 
 A modern wedding marketplace platform connecting couples with wedding vendors.
@@ -54,3 +55,6 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 ## License
 
 MIT
+=======
+# bmatchd-code
+>>>>>>> ff394d24b9473bc112198cc4316feec2c094ff2b
