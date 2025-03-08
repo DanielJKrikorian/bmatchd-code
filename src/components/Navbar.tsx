@@ -13,35 +13,60 @@ const Navbar = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const fetchUserRole = async (userId: string) => {
-    const { data: userData, error } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', userId)
-      .single();
-
-    if (error || !userData) {
-      console.error('Error fetching user role:', error);
-      return null;
+  const fetchUserRole = async (userId: string, userMetadata: any) => {
+    // Fallback to metadata if available
+    if (userMetadata?.role) {
+      console.log('Navbar: Using role from metadata:', userMetadata.role);
+      return userMetadata.role;
     }
 
-    if (userData.role === 'vendor') {
-      const { data: vendorData, error: vendorError } = await supabase
-        .from('vendors')
-        .select('id')
-        .eq('user_id', userId)
-        .maybeSingle();
+    // Retry logic for fetching role from users table
+    let attempts = 0;
+    const maxAttempts = 3;
+    const delay = 2000; // 2 seconds between retries
 
-      if (vendorError || !vendorData) {
-        console.error('Error fetching vendor data:', vendorError);
+    while (attempts < maxAttempts) {
+      const { data: userData, error } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', userId)
+        .maybeSingle(); // Use maybeSingle to handle no rows gracefully
+
+      if (error) {
+        console.error('Error fetching user role (attempt ' + (attempts + 1) + '):', error);
+        if (attempts === maxAttempts - 1) return null;
+      }
+
+      if (userData?.role) {
+        console.log('Navbar: Role fetched from users table:', userData.role);
+        if (userData.role === 'vendor') {
+          const { data: vendorData, error: vendorError } = await supabase
+            .from('vendors')
+            .select('id')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+          if (vendorError || !vendorData) {
+            console.error('Error fetching vendor data:', vendorError);
+            return null;
+          }
+          console.log('Navbar: Vendor authenticated');
+          return 'vendor';
+        } else if (userData.role === 'couple') {
+          console.log('Navbar: Couple authenticated');
+          return 'couple';
+        }
         return null;
       }
-      console.log('Navbar: Vendor authenticated');
-      return 'vendor';
-    } else if (userData.role === 'couple') {
-      console.log('Navbar: Couple authenticated');
-      return 'couple';
+
+      attempts++;
+      if (attempts < maxAttempts) {
+        console.log(`Navbar: Role not found, retrying (${attempts}/${maxAttempts})...`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
     }
+
+    console.error('Navbar: Max retry attempts reached, role not found in users table');
     return null;
   };
 
@@ -52,7 +77,7 @@ const Navbar = () => {
         session: data.session,
         user: data.session?.user,
         token: data.session?.access_token,
-        error: error?.message
+        error: error?.message,
       });
     });
 
@@ -61,12 +86,12 @@ const Navbar = () => {
         event,
         user: session?.user,
         token: session?.access_token,
-        currentPath: location.pathname
+        currentPath: location.pathname,
       });
 
       if (session?.user) {
         setIsAuthenticated(true);
-        const role = await fetchUserRole(session.user.id);
+        const role = await fetchUserRole(session.user.id, session.user.user_metadata);
         setUserRole(role);
         // Redirect to dashboard only if on home page and vendor
         if (event === 'INITIAL_SESSION' && role === 'vendor' && location.pathname === '/') {
@@ -77,7 +102,13 @@ const Navbar = () => {
         setUserRole(null);
         console.log('Navbar: No user authenticated');
         // Only redirect to signin if on a protected route and not already navigating to signin
-        const protectedRoutes = ['/dashboard', '/vendor/messages', '/couple/messages', '/saved-vendors', '/couple/wedding-team'];
+        const protectedRoutes = [
+          '/dashboard',
+          '/vendor/messages',
+          '/couple/messages',
+          '/saved-vendors',
+          '/couple/wedding-team',
+        ];
         if (protectedRoutes.includes(location.pathname) && location.pathname !== '/signin') {
           navigate('/signin');
         }
@@ -113,7 +144,7 @@ const Navbar = () => {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           <Link to="/" className="flex items-center space-x-2">
-            <img 
+            <img
               src="https://rtzrhxxdqmnpydskixso.supabase.co/storage/v1/object/public/public_1//BMatchd-no-tag.png"
               alt="BMATCHD"
               className="h-16 w-auto"
@@ -127,8 +158,8 @@ const Navbar = () => {
             </Link>
             {isAuthenticated && (
               <>
-                <Link 
-                  to={userRole === 'vendor' ? '/vendor/messages' : '/couple/messages'} 
+                <Link
+                  to={userRole === 'vendor' ? '/vendor/messages' : '/couple/messages'}
                   className="flex items-center space-x-1 text-gray-600 hover:text-gray-900"
                 >
                   <MessageSquare className="w-4 h-4" />
@@ -145,7 +176,9 @@ const Navbar = () => {
           <div className="hidden md:flex items-center space-x-4">
             {!isAuthenticated ? (
               <>
-                <Button variant="ghost" onClick={() => handleNavigate('/signin')}>Sign In</Button>
+                <Button variant="ghost" onClick={() => handleNavigate('/signin')}>
+                  Sign In
+                </Button>
                 <Button onClick={() => handleNavigate('/get-started')}>Get Started</Button>
               </>
             ) : (

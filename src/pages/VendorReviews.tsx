@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Star, Calendar, Link, MessageSquare } from 'lucide-react';
+import { Star, Calendar, MessageSquare } from 'lucide-react';
 import { Button } from '../components/ui/button.tsx';
 import { supabase } from '../lib/supabase.ts';
 import { toast } from 'react-hot-toast';
@@ -218,10 +218,7 @@ const VendorReviews = () => {
             <h1 className="text-3xl font-bold">Reviews & Ratings</h1>
             <p className="text-gray-600">Manage and respond to your customer reviews</p>
           </div>
-          <Button onClick={() => navigate('/vendor/reviews/links')}>
-            <Link className="w-4 h-4 mr-2" />
-            Get Reviews
-          </Button>
+          {/* Removed the Get Reviews button */}
         </div>
       </div>
 

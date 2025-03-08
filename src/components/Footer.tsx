@@ -1,4 +1,3 @@
-// src/components/Footer.tsx
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Facebook, Instagram, Mail, Shield } from 'lucide-react';
@@ -71,7 +70,7 @@ const Footer = () => {
   return (
     <footer className="bg-white border-t mt-20">
       <div className="max-w-7xl mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Brand */}
           <div className="space-y-4">
             <Link to="/" className="flex items-center space-x-2">
@@ -122,66 +121,10 @@ const Footer = () => {
             </div>
           </div>
 
-          {/* For Couples */}
-          <div>
-            <h3 className="font-semibold mb-4">For Couples</h3>
-            <ul className="space-y-3">
-              <li>
-                <Link to="/vendors" className="text-gray-600 hover:text-primary">
-                  Find Vendors
-                </Link>
-              </li>
-              <li>
-                <Link to="/couple/register" className="text-gray-600 hover:text-primary">
-                  Create Account
-                </Link>
-              </li>
-              <li>
-                <Link to="/saved-vendors" className="text-gray-600 hover:text-primary">
-                  Saved Vendors
-                </Link>
-              </li>
-              <li>
-                <Link to="/couple/messages" className="text-gray-600 hover:text-primary">
-                  Messages
-                </Link>
-              </li>
-            </ul>
-          </div>
+          {/* Empty Middle Column (Spacer) */}
+          <div></div>
 
-          {/* For Vendors */}
-          <div>
-            <h3 className="font-semibold mb-4">For Vendors</h3>
-            <ul className="space-y-3">
-              <li>
-                <Link to="/vendor/register" className="text-gray-600 hover:text-primary">
-                  List Your Business
-                </Link>
-              </li>
-              <li>
-                <Link to="/subscription" className="text-gray-600 hover:text-primary">
-                  Subscription Plans
-                </Link>
-              </li>
-              <li>
-                <Link to="/vendor/dashboard" className="text-gray-600 hover:text-primary">
-                  Vendor Dashboard
-                </Link>
-              </li>
-              <li>
-                <Link to="/vendor/settings" className="text-gray-600 hover:text-primary">
-                  Business Settings
-                </Link>
-              </li>
-              <li>
-                <Link to="/vendor/ambassador" className="text-gray-600 hover:text-primary">
-                  Ambassador Program
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          {/* Support */}
+          {/* Support (Moved to Far Right) */}
           <div>
             <h3 className="font-semibold mb-4">Support</h3>
             <ul className="space-y-3">
@@ -203,6 +146,11 @@ const Footer = () => {
               <li>
                 <Link to="/terms" className="text-gray-600 hover:text-primary">
                   Terms of Service
+                </Link>
+              </li>
+              <li>
+                <Link to="/vendor/ambassador" className="text-gray-600 hover:text-primary">
+                  Ambassador Program
                 </Link>
               </li>
             </ul>

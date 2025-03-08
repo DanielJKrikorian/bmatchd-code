@@ -4,7 +4,7 @@ import { Store, Globe, Facebook, Instagram, Youtube, MapPin, DollarSign, Loader2
 import { Button } from '../components/ui/button';
 import { toast } from 'react-hot-toast';
 import CitySelect from '../components/CitySelect';
-import MediaUpload from '../components/MediaUpload'; // Updated from ImageUpload
+import MediaUpload from '../components/MediaUpload';
 import { supabase } from '../lib/supabase';
 
 const VENDOR_CATEGORIES = [
@@ -37,6 +37,7 @@ const VendorOnboarding = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [hasUploadError, setHasUploadError] = useState(false);
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState<OnboardingData>({
     businessName: '',
@@ -53,7 +54,7 @@ const VendorOnboarding = () => {
     selectedCities: [],
     images: [],
     videos: [],
-    primaryImage: 0
+    primaryImage: 0,
   });
 
   useEffect(() => {
@@ -81,7 +82,7 @@ const VendorOnboarding = () => {
       }
 
       if (vendorData) {
-        setFormData(prev => ({
+        setFormData((prev) => ({
           ...prev,
           businessName: vendorData.business_name || '',
           category: vendorData.category || '',
@@ -96,7 +97,7 @@ const VendorOnboarding = () => {
           youtubeUrl: vendorData.youtube_url || '',
           images: vendorData.images || [],
           videos: vendorData.videos || [],
-          primaryImage: vendorData.primary_image || 0
+          primaryImage: vendorData.primary_image || 0,
         }));
 
         const { data: serviceAreas } = await supabase
@@ -104,9 +105,9 @@ const VendorOnboarding = () => {
           .select('city_id')
           .eq('vendor_id', vendorData.id);
 
-        setFormData(prev => ({
+        setFormData((prev) => ({
           ...prev,
-          selectedCities: serviceAreas?.map(area => area.city_id) || []
+          selectedCities: serviceAreas?.map((area) => area.city_id) || [],
         }));
       }
     } catch (error) {
@@ -120,18 +121,46 @@ const VendorOnboarding = () => {
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [e.target.name]: e.target.value
+      [e.target.name]: e.target.value,
     }));
+  };
+
+  const generateSlug = (name: string) => {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-') // Replace non-alphanumeric with hyphens
+      .replace(/(^-|-$)/g, '') // Remove leading/trailing hyphens
+      .replace(/--+/g, '-'); // Replace multiple hyphens with single
+  };
+
+  const ensureUniqueSlug = async (baseSlug: string, userId: string) => {
+    let slug = baseSlug;
+    let counter = 1;
+    while (true) {
+      const { data } = await supabase
+        .from('vendors')
+        .select('slug')
+        .eq('slug', slug)
+        .neq('user_id', userId) // Exclude the current vendor
+        .maybeSingle();
+      if (!data) break; // Slug is unique
+      slug = `${baseSlug}-${counter++}`;
+    }
+    return slug;
   };
 
   const handleSubmit = async () => {
     try {
       setSubmitting(true);
-      
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
+
+      // Generate and ensure unique slug
+      const baseSlug = generateSlug(formData.businessName);
+      const slug = await ensureUniqueSlug(baseSlug, user.id);
 
       const { data: vendorData, error: vendorError } = await supabase
         .from('vendors')
@@ -162,7 +191,8 @@ const VendorOnboarding = () => {
             youtube_url: formData.youtubeUrl,
             images: formData.images,
             videos: formData.videos,
-            primary_image: formData.primaryImage
+            primary_image: formData.primaryImage,
+            slug: slug, // Include slug in update
           })
           .eq('id', vendorData.id);
 
@@ -171,24 +201,27 @@ const VendorOnboarding = () => {
       } else {
         const { data: newVendor, error: createError } = await supabase
           .from('vendors')
-          .insert([{
-            user_id: user.id,
-            business_name: formData.businessName,
-            category: formData.category,
-            description: formData.description,
-            location: formData.location,
-            price_range: formData.priceRange,
-            email: formData.email,
-            phone: formData.phone,
-            website_url: formData.websiteUrl,
-            facebook_url: formData.facebookUrl,
-            instagram_url: formData.instagramUrl,
-            youtube_url: formData.youtubeUrl,
-            images: formData.images,
-            videos: formData.videos,
-            primary_image: formData.primaryImage,
-            rating: 0
-          }])
+          .insert([
+            {
+              user_id: user.id,
+              business_name: formData.businessName,
+              category: formData.category,
+              description: formData.description,
+              location: formData.location,
+              price_range: formData.priceRange,
+              email: formData.email,
+              phone: formData.phone,
+              website_url: formData.websiteUrl,
+              facebook_url: formData.facebookUrl,
+              instagram_url: formData.instagramUrl,
+              youtube_url: formData.youtubeUrl,
+              images: formData.images,
+              videos: formData.videos,
+              primary_image: formData.primaryImage,
+              rating: 0,
+              slug: slug, // Include slug in insert
+            },
+          ])
           .select()
           .single();
 
@@ -205,9 +238,9 @@ const VendorOnboarding = () => {
         const { error: serviceAreasError } = await supabase
           .from('vendor_service_areas')
           .insert(
-            formData.selectedCities.map(cityId => ({
+            formData.selectedCities.map((cityId) => ({
               vendor_id: vendorId,
-              city_id: cityId
+              city_id: cityId,
             }))
           );
 
@@ -217,7 +250,7 @@ const VendorOnboarding = () => {
       }
 
       toast.success('Profile updated successfully!');
-      navigate('/dashboard'); // Changed from /subscription
+      navigate('/dashboard');
     } catch (error: any) {
       console.error('Error updating vendor profile:', error);
       toast.error(error.message || 'Failed to update profile');
@@ -242,24 +275,18 @@ const VendorOnboarding = () => {
             {[1, 2, 3, 4, 5, 6].map((stepNumber) => (
               <div
                 key={stepNumber}
-                className={`flex items-center ${
-                  stepNumber < 6 ? 'flex-1' : ''
-                }`}
+                className={`flex items-center ${stepNumber < 6 ? 'flex-1' : ''}`}
               >
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                    step >= stepNumber
-                      ? 'bg-primary text-white'
-                      : 'bg-gray-100 text-gray-400'
+                    step >= stepNumber ? 'bg-primary text-white' : 'bg-gray-100 text-gray-400'
                   }`}
                 >
                   {stepNumber}
                 </div>
                 {stepNumber < 6 && (
                   <div
-                    className={`flex-1 h-1 mx-2 ${
-                      step > stepNumber ? 'bg-primary' : 'bg-gray-100'
-                    }`}
+                    className={`flex-1 h-1 mx-2 ${step > stepNumber ? 'bg-primary' : 'bg-gray-100'}`}
                   />
                 )}
               </div>
@@ -303,8 +330,10 @@ const VendorOnboarding = () => {
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 >
                   <option value="">Select a category</option>
-                  {VENDOR_CATEGORIES.map(category => (
-                    <option key={category} value={category}>{category}</option>
+                  {VENDOR_CATEGORIES.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -417,7 +446,7 @@ const VendorOnboarding = () => {
                 </label>
                 <CitySelect
                   selectedCities={formData.selectedCities}
-                  onChange={(cities) => setFormData(prev => ({ ...prev, selectedCities: cities }))}
+                  onChange={(cities) => setFormData((prev) => ({ ...prev, selectedCities: cities }))}
                 />
               </div>
             </div>
@@ -499,10 +528,11 @@ const VendorOnboarding = () => {
                 images={formData.images}
                 videos={formData.videos}
                 primaryImage={formData.primaryImage}
-                onImagesChange={(images) => setFormData(prev => ({ ...prev, images }))}
-                onVideosChange={(videos) => setFormData(prev => ({ ...prev, videos }))}
-                onPrimaryChange={(index) => setFormData(prev => ({ ...prev, primaryImage: index }))}
+                onImagesChange={(images) => setFormData((prev) => ({ ...prev, images }))}
+                onVideosChange={(videos) => setFormData((prev) => ({ ...prev, videos }))}
+                onPrimaryChange={(index) => setFormData((prev) => ({ ...prev, primaryImage: index }))}
                 userRole="vendor"
+                onUploadError={(hasError) => setHasUploadError(hasError)}
               />
             </div>
           )}
@@ -512,7 +542,7 @@ const VendorOnboarding = () => {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setStep(prev => prev - 1)}
+                onClick={() => setStep((prev) => prev - 1)}
               >
                 Back
               </Button>
@@ -523,10 +553,14 @@ const VendorOnboarding = () => {
                   if (step === 6) {
                     handleSubmit();
                   } else {
-                    setStep(prev => prev + 1);
+                    setStep((prev) => prev + 1);
                   }
                 }}
-                disabled={submitting || (step === 1 && (!formData.businessName || !formData.category))}
+                disabled={
+                  submitting ||
+                  (step === 1 && (!formData.businessName || !formData.category)) ||
+                  (step === 6 && hasUploadError)
+                }
               >
                 {submitting ? (
                   <>

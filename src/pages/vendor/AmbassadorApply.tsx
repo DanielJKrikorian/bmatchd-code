@@ -3,6 +3,7 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
+import { supabase } from '../../lib/supabase';
 
 interface FormData {
   name: string;
@@ -35,43 +36,29 @@ const AmbassadorApply = () => {
     setLoading(true);
 
     try {
-      const response = await fetch('/.netlify/functions/send-contact-email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      // Insert the form data into the ambassador_applications table
+      const { error } = await supabase
+        .from('ambassador_applications')
+        .insert({
           name: formData.name,
           email: formData.email,
-          subject: `Ambassador Program Application - ${formData.program.charAt(0).toUpperCase() + formData.program.slice(1)}`,
-          message: `
-New Ambassador Program Application
+          phone: formData.phone,
+          program: formData.program,
+          instagram: formData.instagram || null, // Store empty strings as null
+          facebook: formData.facebook || null,
+          tiktok: formData.tiktok || null,
+          message: formData.message,
+        });
 
-Name: ${formData.name}
-Email: ${formData.email}
-Phone: ${formData.phone}
-Program: ${formData.program}
-
-Social Media:
-Instagram: ${formData.instagram}
-Facebook: ${formData.facebook}
-TikTok: ${formData.tiktok}
-
-Message:
-${formData.message}
-          `.trim()
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to send application');
+      if (error) {
+        throw new Error(`Failed to submit application: ${error.message}`);
       }
 
       toast.success('Application submitted successfully! We will contact you soon.');
       navigate('/vendor/ambassador');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error submitting application:', error);
-      toast.error('Failed to submit application. Please try again.');
+      toast.error(error.message || 'Failed to submit application. Please try again.');
     } finally {
       setLoading(false);
     }

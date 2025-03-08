@@ -7,8 +7,10 @@ import { toast } from 'react-hot-toast';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
 
-console.log('PaymentPage: Loading Stripe with VITE_STRIPE_PUBLIC_KEY:', import.meta.env.VITE_STRIPE_PUBLIC_KEY);
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
+// Use a stable stripePromise outside the component
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY || 'pk_test_51Qidb0AkjdPARDoIblpf881c4AGwku6GaAiyKMXQXtU763AatyWz9QuT6go5dvDOIynbbXuXxuwQPxnyBS00ISD0g2xO');
+
+console.log('PaymentPage: Loading Stripe with VITE_STRIPE_PUBLIC_KEY:', import.meta.env.VITE_STRIPE_PUBLIC_KEY || 'pk_test_...');
 
 const SUBSCRIPTION_PLANS = [
   { id: 'essential', name: 'Essential Listing', price: 29, yearlyPrice: 290, description: 'Get found and start booking clients', features: ['Standard Listing in Vendor Directory', 'Appear in Relevant Search Results', 'Contact Requests from Interested Clients', 'Access to Basic Analytics'], priceId: { monthly: 'price_1Qm0j3AkjdPARDjPzuQeCIMv', yearly: 'price_1Qm0j0AkjdPARDjPTefXNs7O' } },
@@ -25,12 +27,12 @@ const PaymentPage = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [couponLoading, setCouponLoading] = useState(false);
   const { planId, interval = 'monthly' } = location.state || { planId: 'price_1Qm0j3AkjdPARDjPzuQeCIMv' };
-  
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     address: { line1: '', city: '', state: '', postal_code: '', country: 'US' },
-    couponCode: ''
+    couponCode: '',
   });
   const [discount, setDiscount] = useState<number>(0);
   const [discountedPrice, setDiscountedPrice] = useState<number>(0);
@@ -65,30 +67,42 @@ const PaymentPage = () => {
     setCouponLoading(true);
     try {
       console.log('PaymentPage: Applying promo code:', formData.couponCode);
-      const response = await fetch(`https://api.stripe.com/v1/promotion_codes?code=${formData.couponCode}`, {
-        method: 'GET',
-        headers: { 'Authorization': `Bearer ${import.meta.env.VITE_STRIPE_SECRET_KEY}` }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const response = await fetch('https://rtzrhxxdqmnpydskixso.supabase.co/functions/v1/stripe-subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          userId: session.user.id,
+          paymentMethodId: null, // Just for coupon validation
+          priceId: planId,
+          couponCode: formData.couponCode,
+        }),
       });
-      const promoData = await response.json();
-      console.log('PaymentPage: Promo code response:', JSON.stringify(promoData, null, 2));
-      if (response.ok && promoData.data.length > 0 && promoData.data[0].active) {
-        const coupon = promoData.data[0].coupon;
-        const discountPercent = coupon.percent_off ? coupon.percent_off / 100 : 0;
-        setDiscount(discountPercent);
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Invalid or expired promo code');
+
+      if (result.couponApplied && result.discountPercent) {
         const plan = SUBSCRIPTION_PLANS.find(p => p.priceId.monthly === planId || p.priceId.yearly === planId) || SUBSCRIPTION_PLANS[0];
         const basePrice = interval === 'yearly' ? plan.yearlyPrice : plan.price;
-        setDiscountedPrice(basePrice * (1 - discountPercent));
-        toast.success(`Promo code ${formData.couponCode} applied! ${coupon.percent_off}% off.`);
+        setDiscount(result.discountPercent);
+        setDiscountedPrice(basePrice * (1 - result.discountPercent));
+        toast.success(`Promo code ${formData.couponCode} applied! ${(result.discountPercent * 100)}% off`);
       } else {
         setDiscount(0);
         setDiscountedPrice(SUBSCRIPTION_PLANS.find(p => p.priceId.monthly === planId || p.priceId.yearly === planId)!.price);
-        toast.error(promoData.error?.message || 'Invalid or expired promo code');
+        toast.error('Invalid or expired promo code');
       }
     } catch (err: any) {
       console.error('PaymentPage: Error validating promo code:', err);
       setDiscount(0);
       setDiscountedPrice(SUBSCRIPTION_PLANS.find(p => p.priceId.monthly === planId || p.priceId.yearly === planId)!.price);
-      toast.error('Failed to validate promo code');
+      toast.error(err.message || 'Failed to validate promo code');
     } finally {
       setCouponLoading(false);
     }
@@ -104,8 +118,8 @@ const PaymentPage = () => {
     setLoading(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
 
       const cardElement = elements.getElement(CardElement);
       if (!cardElement) throw new Error('Card input error');
@@ -128,52 +142,32 @@ const PaymentPage = () => {
 
       console.log('PaymentPage: PaymentMethod created:', paymentMethod.id);
 
-      console.log('PaymentPage: Creating customer with Stripe');
-      const customerResponse = await fetch('https://api.stripe.com/v1/customers', {
+      console.log('PaymentPage: Calling Supabase Edge Function for subscription');
+      const response = await fetch('https://rtzrhxxdqmnpydskixso.supabase.co/functions/v1/stripe-subscribe', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_STRIPE_SECRET_KEY}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
         },
-        body: new URLSearchParams({
-          email: formData.email,
-          name: formData.name,
-          payment_method: paymentMethod.id,
-          'invoice_settings[default_payment_method]': paymentMethod.id,
-          'address[line1]': formData.address.line1,
-          'address[city]': formData.address.city,
-          'address[state]': formData.address.state,
-          'address[postal_code]': formData.address.postal_code,
-          'address[country]': formData.address.country,
-          'metadata[userId]': user.id,
-        }).toString(),
+        body: JSON.stringify({
+          userId: session.user.id,
+          paymentMethodId: paymentMethod.id,
+          priceId: planId,
+          couponCode: formData.couponCode || null,
+        }),
       });
 
-      const customer = await customerResponse.json();
-      if (!customerResponse.ok) throw new Error(customer.error.message || 'Failed to create customer');
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Failed to create subscription');
 
-      console.log('PaymentPage: Customer created:', customer.id);
+      const { clientSecret } = result;
+      if (clientSecret) {
+        console.log('PaymentPage: Confirming card payment with Stripe');
+        const { error: confirmError } = await stripe.confirmCardPayment(clientSecret);
+        if (confirmError) throw confirmError;
+      }
 
-      console.log('PaymentPage: Creating subscription with Stripe');
-      const subscriptionResponse = await fetch('https://api.stripe.com/v1/subscriptions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_STRIPE_SECRET_KEY}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          customer: customer.id,
-          'items[0][price]': planId,
-          default_payment_method: paymentMethod.id,
-          ...(formData.couponCode && discount > 0 && { promotion_code: formData.couponCode }), // Use promo code directly
-          'metadata[userId]': user.id,
-        }).toString(),
-      });
-
-      const subscription = await subscriptionResponse.json();
-      if (!subscriptionResponse.ok) throw new Error(subscription.error.message || 'Failed to create subscription');
-
-      console.log('PaymentPage: Subscription created:', subscription.id);
+      console.log('PaymentPage: Subscription successful:', result.subscriptionId);
       setShowSuccess(true);
       setTimeout(() => {
         navigate('/dashboard');

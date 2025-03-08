@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Calendar, MessageSquare, Settings, LogOut, Star, Store, Link as LinkIcon, Check, 
-  BarChart3, Package, Globe, Eye, Gift 
+  BarChart3, Package, Globe, Gift, Eye // Added Eye import
 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { supabase } from '../../lib/supabase';
@@ -206,6 +206,15 @@ const VendorDashboard: React.FC<VendorDashboardProps> = ({ vendor }) => {
     }
   };
 
+  const handlePreview = () => {
+    if (!vendor.slug) {
+      toast.error('Profile slug not set. Please complete your profile setup.');
+      navigate('/vendor/settings');
+      return;
+    }
+    navigate(`/vendors/${vendor.slug}`);
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 px-4 sm:px-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -385,7 +394,7 @@ const VendorDashboard: React.FC<VendorDashboardProps> = ({ vendor }) => {
           <div className="flex gap-2">
             <Button 
               variant="outline" 
-              onClick={() => navigate(`/vendors/${vendor.slug}/preview`)}
+              onClick={handlePreview}
             >
               <Eye className="w-4 h-4 mr-2" />
               Preview

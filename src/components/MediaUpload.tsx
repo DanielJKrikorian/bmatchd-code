@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Upload, X, Loader2 } from 'lucide-react';
-import { Button } from './ui/button'; // Correct from src/components/
+import { Button } from './ui/button';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
@@ -13,6 +13,7 @@ interface MediaUploadProps {
   onVideosChange: (videos: { url: string; thumbnailTime: number }[]) => void;
   onPrimaryChange: (index: number) => void;
   userRole: 'vendor' | 'couple';
+  onUploadError?: (hasError: boolean) => void; // Callback to notify parent of upload errors
 }
 
 const MAX_IMAGES = 25;
@@ -28,14 +29,17 @@ const MediaUpload = ({
   onVideosChange,
   onPrimaryChange,
   userRole,
+  onUploadError,
 }: MediaUploadProps) => {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState<{ [key: string]: number }>({});
+  const [uploadErrors, setUploadErrors] = useState<string[]>([]);
   const videoRefs = useRef<{ [key: string]: HTMLVideoElement | null }>({});
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     setUploading(true);
+    setUploadErrors([]); // Reset errors
 
     const files = Array.from(e.target.files);
     const newImages = [...images];
@@ -54,36 +58,43 @@ const MediaUpload = ({
 
         if (!isImage && !isVideo) {
           toast.error(`${file.name} is not an image or video`);
+          setUploadErrors((prev) => [...prev, `${file.name} is not an image or video`]);
           allSuccessful = false;
           continue;
         }
         if (isImage && fileSizeMB > MAX_IMAGE_SIZE) {
           toast.error(`${file.name} exceeds 25MB limit`);
+          setUploadErrors((prev) => [...prev, `${file.name} exceeds 25MB limit`]);
           allSuccessful = false;
           continue;
         }
         if (isVideo && fileSizeMB > MAX_VIDEO_SIZE) {
           toast.error(`${file.name} exceeds 250MB limit`);
+          setUploadErrors((prev) => [...prev, `${file.name} exceeds 250MB limit`]);
           allSuccessful = false;
           continue;
         }
         if (isImage && !['image/jpeg', 'image/png'].includes(fileType)) {
           toast.error(`${file.name} must be JPG or PNG`);
+          setUploadErrors((prev) => [...prev, `${file.name} must be JPG or PNG`]);
           allSuccessful = false;
           continue;
         }
         if (isVideo && !['video/mp4', 'video/quicktime', 'video/mpeg'].includes(fileType)) {
           toast.error(`${file.name} must be MP4, MOV, or MPEG`);
+          setUploadErrors((prev) => [...prev, `${file.name} must be MP4, MOV, or MPEG`]);
           allSuccessful = false;
           continue;
         }
         if (isImage && newImages.length >= MAX_IMAGES) {
           toast.error(`Max ${MAX_IMAGES} images reached`);
+          setUploadErrors((prev) => [...prev, `Max ${MAX_IMAGES} images reached`]);
           allSuccessful = false;
           break;
         }
         if (isVideo && newVideos.length >= MAX_VIDEOS) {
           toast.error(`Max ${MAX_VIDEOS} videos reached`);
+          setUploadErrors((prev) => [...prev, `Max ${MAX_VIDEOS} videos reached`]);
           allSuccessful = false;
           break;
         }
@@ -92,6 +103,7 @@ const MediaUpload = ({
         const bucket = isImage ? `${userRole}-images` : `${userRole}-videos`;
 
         setProgress((prev) => ({ ...prev, [file.name]: 0 }));
+        // Simulate progress (since Supabase JS doesn't support onUploadProgress yet)
         const simulateProgress = setInterval(() => {
           setProgress((prev) => ({
             ...prev,
@@ -112,6 +124,7 @@ const MediaUpload = ({
         if (error) {
           console.error(`[UPLOAD] Error for ${file.name}:`, error);
           toast.error(`Failed to upload ${file.name}: ${error.message}`);
+          setUploadErrors((prev) => [...prev, `Failed to upload ${file.name}: ${error.message}`]);
           setProgress((prev) => {
             const newProgress = { ...prev };
             delete newProgress[file.name];
@@ -134,30 +147,37 @@ const MediaUpload = ({
       onVideosChange(newVideos);
       if (newImages.length > 0 && images.length === 0) onPrimaryChange(0);
 
-      const table = userRole === 'vendor' ? 'vendors' : 'couples';
-      const { error: updateError } = await supabase
-        .from(table)
-        .update({
-          images: newImages,
-          videos: newVideos,
-          primary_image: primaryImage,
-        })
-        .eq('user_id', user.id);
+      // Only update the database if uploads are successful
+      if (allSuccessful) {
+        const table = userRole === 'vendor' ? 'vendors' : 'couples';
+        const { error: updateError } = await supabase
+          .from(table)
+          .update({
+            images: newImages,
+            videos: newVideos,
+            primary_image: primaryImage,
+          })
+          .eq('user_id', user.id);
 
-      if (updateError) {
-        console.error('[UPLOAD] DB update error:', updateError);
-        toast.error('Failed to save changes');
-        allSuccessful = false;
+        if (updateError) {
+          console.error('[UPLOAD] DB update error:', updateError);
+          toast.error('Failed to save changes');
+          setUploadErrors((prev) => [...prev, 'Failed to save media changes']);
+          allSuccessful = false;
+        } else {
+          toast.success('Media uploaded successfully');
+        }
       }
-
-      if (allSuccessful) toast.success('Media uploaded successfully');
-    } catch (error) {
+    } catch (error: any) {
       console.error('[UPLOAD] General error:', error);
-      toast.error('Upload failed');
+      toast.error('Upload failed: ' + (error.message || 'Unknown error'));
+      setUploadErrors((prev) => [...prev, 'Upload failed: ' + (error.message || 'Unknown error')]);
       allSuccessful = false;
     } finally {
       setUploading(false);
       if (allSuccessful) setTimeout(() => setProgress({}), 1000);
+      // Notify parent of upload errors
+      if (onUploadError) onUploadError(!allSuccessful);
     }
   };
 
@@ -189,9 +209,12 @@ const MediaUpload = ({
         .eq('user_id', user.id);
 
       if (error) throw error;
-    } catch (error) {
+      toast.success('Media removed successfully');
+    } catch (error: any) {
       console.error('[REMOVE] Error:', error);
-      toast.error('Failed to remove media');
+      toast.error('Failed to remove media: ' + (error.message || 'Unknown error'));
+      setUploadErrors((prev) => [...prev, 'Failed to remove media: ' + (error.message || 'Unknown error')]);
+      if (onUploadError) onUploadError(true);
     }
   };
 
@@ -209,9 +232,11 @@ const MediaUpload = ({
 
       if (error) throw error;
       toast.success('Primary image updated');
-    } catch (error) {
+    } catch (error: any) {
       console.error('[PRIMARY] Error:', error);
-      toast.error('Failed to update primary image');
+      toast.error('Failed to update primary image: ' + (error.message || 'Unknown error'));
+      setUploadErrors((prev) => [...prev, 'Failed to update primary image: ' + (error.message || 'Unknown error')]);
+      if (onUploadError) onUploadError(true);
     }
   };
 
@@ -233,22 +258,37 @@ const MediaUpload = ({
 
       if (error) throw error;
       toast.success('Thumbnail updated');
-    } catch (error) {
+    } catch (error: any) {
       console.error('[THUMBNAIL] Error:', error);
-      toast.error('Failed to update thumbnail');
+      toast.error('Failed to update thumbnail: ' + (error.message || 'Unknown error'));
+      setUploadErrors((prev) => [...prev, 'Failed to update thumbnail: ' + (error.message || 'Unknown error')]);
+      if (onUploadError) onUploadError(true);
     }
   };
 
   return (
-    <DragDropContext onDragEnd={(result) => {
-      if (!result.destination) return;
-      const newImages = Array.from(images);
-      const [reordered] = newImages.splice(result.source.index, 1);
-      newImages.splice(result.destination.index, 0, reordered);
-      onImagesChange(newImages);
-      if (primaryImage === result.source.index) handlePrimaryChange(result.destination.index);
-    }}>
+    <DragDropContext
+      onDragEnd={(result) => {
+        if (!result.destination) return;
+        const newImages = Array.from(images);
+        const [reordered] = newImages.splice(result.source.index, 1);
+        newImages.splice(result.destination.index, 0, reordered);
+        onImagesChange(newImages);
+        if (primaryImage === result.source.index) handlePrimaryChange(result.destination.index);
+      }}
+    >
       <div className="space-y-4">
+        {uploadErrors.length > 0 && (
+          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded">
+            <p className="font-bold">Upload Errors:</p>
+            <ul className="list-disc list-inside">
+              {uploadErrors.map((error, index) => (
+                <li key={index}>{error}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Upload Media</label>
           <input
