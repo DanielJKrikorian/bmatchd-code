@@ -90,6 +90,7 @@ function App() {
                   <Route path="/signin" element={<SignInSelection />} />
                   <Route path="/couple/signin" element={<CoupleSignIn />} />
                   <Route path="/couple/register" element={<CoupleAuth />} />
+                  <Route path="/couple/settings" element={<CoupleSettings />} />
                   <Route path="/couple/profile/edit" element={<CoupleSettings />} />
                   <Route path="/vendor/signin" element={<VendorSignIn />} />
                   <Route path="/vendor/register" element={<VendorRegister />} />

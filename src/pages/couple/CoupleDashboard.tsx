@@ -53,6 +53,7 @@ const CoupleDashboard: React.FC<CoupleDashboardProps> = ({ couple }) => {
     totalAppointments: 0
   });
   const [showCopied, setShowCopied] = useState(false);
+  const [loading, setLoading] = useState(true); // Add loading state
 
   const loadCoupleMetrics = useCallback(async () => {
     try {
@@ -87,8 +88,42 @@ const CoupleDashboard: React.FC<CoupleDashboardProps> = ({ couple }) => {
   }, [couple.id, couple.user_id]);
 
   useEffect(() => {
-    loadCoupleMetrics();
-  }, [loadCoupleMetrics]);
+    const checkUserRole = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          toast.error('Please sign in to access the dashboard');
+          navigate('/auth');
+          return;
+        }
+
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+
+        if (userError) throw userError;
+
+        if (userData?.role !== 'couple') {
+          toast.error('Access denied: You are not a couple');
+          navigate('/auth');
+          return;
+        }
+
+        // Role is confirmed as couple, proceed with metrics
+        loadCoupleMetrics();
+      } catch (error) {
+        console.error('Error checking user role:', error);
+        toast.error('Failed to load dashboard');
+        navigate('/auth');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkUserRole();
+  }, [navigate, loadCoupleMetrics]);
 
   const handleLogout = async () => {
     try {
@@ -163,6 +198,14 @@ const CoupleDashboard: React.FC<CoupleDashboardProps> = ({ couple }) => {
     return diffDays > 0 ? diffDays.toString() : 'Wedding day passed';
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <p className="text-gray-600">Loading dashboard...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 px-4 sm:px-6">
       {/* Header */}
@@ -172,7 +215,7 @@ const CoupleDashboard: React.FC<CoupleDashboardProps> = ({ couple }) => {
           <p className="text-gray-600">Plan your perfect wedding</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => navigate("/settings")}>
+          <Button variant="outline" onClick={() => navigate('/couple/settings')}>
             <Settings className="w-4 h-4 mr-2" />
             Settings
           </Button>
@@ -251,7 +294,7 @@ const CoupleDashboard: React.FC<CoupleDashboardProps> = ({ couple }) => {
             icon: <Calendar className="w-6 h-6 text-rose-500" />, 
             label: 'Days Until Wedding',
             value: getDaysUntilWedding(),
-            onClick: () => navigate('/settings')
+            onClick: () => navigate('/couple/settings')
           },
           { 
             icon: <Calendar className="w-6 h-6 text-rose-500" />, 

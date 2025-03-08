@@ -1,10 +1,24 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users2, Store, Star, DollarSign, Calendar, Link, MessageSquare } from 'lucide-react';
-import { Button } from '../components/ui/button';
-import { supabase } from '../lib/supabase';
+import { Star, Calendar, Link, MessageSquare } from 'lucide-react';
+import { Button } from '../components/ui/button.tsx';
+import { supabase } from '../lib/supabase.ts';
 import { toast } from 'react-hot-toast';
-import BackToDashboard from '../components/BackToDashboard';
+import BackToDashboard from '../components/BackToDashboard.tsx';
+
+// Define RawReview type for Supabase response
+interface RawReview {
+  id: string;
+  rating: number;
+  content: string;
+  created_at: string;
+  response?: string | null;
+  response_date?: string | null;
+  couple: Array<{ partner1_name: string; partner2_name: string }> | null;
+  couple_id?: string;
+  reviewer_name?: string;
+  reviewer_email?: string;
+}
 
 interface Review {
   id: string;
@@ -16,7 +30,10 @@ interface Review {
   couple: {
     partner1_name: string;
     partner2_name: string;
-  };
+  } | null;
+  couple_id?: string;
+  reviewer_name?: string;
+  reviewer_email?: string;
 }
 
 const VendorReviews = () => {
@@ -26,11 +43,7 @@ const VendorReviews = () => {
   const [responding, setResponding] = useState<string | null>(null);
   const [response, setResponse] = useState('');
 
-  useEffect(() => {
-    loadReviews();
-  }, []);
-
-  const loadReviews = async () => {
+  const loadReviews = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -56,7 +69,7 @@ const VendorReviews = () => {
         return;
       }
 
-      // Get reviews with couple details
+      // Get reviews with couple details and new fields
       const { data: reviewsData, error: reviewsError } = await supabase
         .from('reviews')
         .select(`
@@ -66,10 +79,13 @@ const VendorReviews = () => {
           response,
           response_date,
           created_at,
-          couple:couples (
+          couple:couples!couple_id (
             partner1_name,
             partner2_name
-          )
+          ),
+          couple_id,
+          reviewer_name,
+          reviewer_email
         `)
         .eq('vendor_id', vendorData.id)
         .order('created_at', { ascending: false });
@@ -80,9 +96,42 @@ const VendorReviews = () => {
         return;
       }
 
+      // Log raw reviewsData to debug
+      console.log('Raw reviewsData:', reviewsData);
+
+      // Transform raw reviews to match Review interface and fetch couple data if needed
+      const transformedReviews = await Promise.all(
+        reviewsData.map(async (review: RawReview) => {
+          let coupleData = review.couple && review.couple.length > 0 ? review.couple[0] : null;
+
+          // If couple is null but couple_id exists, fetch the couple data
+          if (!coupleData && review.couple_id) {
+            const { data: couple, error: coupleError } = await supabase
+              .from('couples')
+              .select('partner1_name, partner2_name')
+              .eq('id', review.couple_id)
+              .single();
+
+            if (coupleError) {
+              console.error('Error fetching couple data:', coupleError);
+            } else {
+              coupleData = couple;
+            }
+          }
+
+          return {
+            ...review,
+            couple: coupleData,
+          } as Review;
+        })
+      );
+
+      // Log transformed reviews to debug
+      console.log('Transformed reviews:', transformedReviews);
+
       // Calculate and update vendor rating
-      const totalRating = reviewsData.reduce((sum, review) => sum + review.rating, 0);
-      const averageRating = reviewsData.length > 0 ? totalRating / reviewsData.length : 0;
+      const totalRating = transformedReviews.reduce((sum: number, review: Review) => sum + review.rating, 0);
+      const averageRating = transformedReviews.length > 0 ? totalRating / transformedReviews.length : 0;
 
       // Update vendor rating
       const { error: updateError } = await supabase
@@ -94,14 +143,18 @@ const VendorReviews = () => {
         console.error('Error updating vendor rating:', updateError);
       }
 
-      setReviews(reviewsData || []);
+      setReviews(transformedReviews);
     } catch (error) {
       console.error('Error loading reviews:', error);
       toast.error('Failed to load reviews');
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate]);
+
+  useEffect(() => {
+    loadReviews();
+  }, [loadReviews]);
 
   const handleSubmitResponse = async (reviewId: string) => {
     if (!response.trim()) {
@@ -210,7 +263,7 @@ const VendorReviews = () => {
             <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <h2 className="text-xl font-semibold mb-2">No reviews yet</h2>
             <p className="text-gray-600">
-              When couples review your services, they'll appear here.
+              When couples or other customers review your services, they'll appear here.
             </p>
           </div>
         ) : (
@@ -236,7 +289,14 @@ const VendorReviews = () => {
                       </span>
                     </div>
                     <p className="font-medium mt-1">
-                      {review.couple.partner1_name} & {review.couple.partner2_name}
+                      {(() => {
+                        console.log('Rendering review:', review);
+                        return review.couple?.partner1_name && review.couple?.partner2_name
+                          ? `${review.couple.partner1_name} & ${review.couple.partner2_name}`
+                          : review.reviewer_name?.trim()
+                          ? `${review.reviewer_name} (${review.reviewer_email || 'No email'})`
+                          : 'Anonymous Reviewer';
+                      })()}
                     </p>
                   </div>
                 </div>
@@ -257,7 +317,7 @@ const VendorReviews = () => {
                   <div className="mt-4">
                     <textarea
                       value={response}
-                      onChange={(e) => setResponse(e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setResponse(e.target.value)}
                       placeholder="Write your response..."
                       className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
                       rows={4}

@@ -26,7 +26,9 @@ const VendorDashboard: React.FC<VendorDashboardProps> = ({ vendor }) => {
   const [showCopied, setShowCopied] = useState(false);
   const [planName, setPlanName] = useState<string>('');
   const [couponCode, setCouponCode] = useState<string | null>(null);
+  const [stripeCouponId, setStripeCouponId] = useState<string | null>(null);
   const [generatingCoupon, setGeneratingCoupon] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
 
   const loadVendorMetrics = useCallback(async () => {
     try {
@@ -104,26 +106,65 @@ const VendorDashboard: React.FC<VendorDashboardProps> = ({ vendor }) => {
     try {
       const { data, error } = await supabase
         .from('vendor_coupons')
-        .select('coupon_code')
+        .select('coupon_code, stripe_coupon_id')
         .eq('vendor_id', vendor.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
-  
+
       if (error) {
         if (error.code === 'PGRST116') {
-          console.log('No coupon found for vendor:', vendor.id); // Debug log
+          console.log('No coupon found for vendor:', vendor.id);
           setCouponCode(null);
+          setStripeCouponId(null);
         } else {
           console.error('Error loading coupon:', error);
           throw error;
         }
       } else {
         setCouponCode(data?.coupon_code || null);
+        setStripeCouponId(data?.stripe_coupon_id || null);
       }
     } catch (error) {
       console.error('Error loading coupon:', error);
       setCouponCode(null);
+      setStripeCouponId(null);
     }
   }, [vendor.id]);
+
+  const generateCoupon = async () => {
+    setGeneratingCoupon(true);
+    setCouponError(null);
+
+    try {
+      const { data, error: functionError } = await supabase.functions.invoke('generate-coupon', {
+        body: JSON.stringify({ vendor_id: vendor.id, business_name: vendor.business_name }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      console.log('Edge Function Response:', { data, functionError });
+
+      if (functionError) {
+        throw new Error(`Function error: ${functionError.message || 'Unknown error'}`);
+      }
+
+      if (!data || !data.couponCode) {
+        throw new Error('No coupon code returned from function');
+      }
+
+      setCouponCode(data.couponCode);
+      setStripeCouponId(data.stripeCouponId);
+      toast.success('Coupon generated successfully!');
+      await loadCoupon();
+    } catch (error: any) {
+      console.error('Error generating coupon:', error);
+      setCouponError(error.message || 'Failed to generate coupon');
+      toast.error(error.message || 'Failed to generate coupon');
+    } finally {
+      setGeneratingCoupon(false);
+    }
+  };
 
   useEffect(() => {
     loadVendorMetrics();
@@ -162,55 +203,6 @@ const VendorDashboard: React.FC<VendorDashboardProps> = ({ vendor }) => {
         console.error('Error sharing profile:', error);
         toast.error('Failed to share profile');
       }
-    }
-  };
-
-  const generateCoupon = async () => {
-    setGeneratingCoupon(true);
-    try {
-      // Verify authentication
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session) {
-        toast.error('Please sign in to generate a coupon');
-        navigate('/signin');
-        return;
-      }
-
-      const { data, error: functionError } = await supabase.functions.invoke('generate-coupon', {
-        body: JSON.stringify({ vendor_id: vendor.id, business_name: vendor.business_name }),
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (functionError) {
-        throw new Error(`Function error: ${functionError.message}`);
-      }
-      if (!data?.couponCode) {
-        throw new Error('No coupon code returned from function');
-      }
-
-      const { error: upsertError } = await supabase
-        .from('vendor_coupons')
-        .upsert({
-          vendor_id: vendor.id,
-          coupon_code: data.couponCode,
-          stripe_coupon_id: data.couponCode,
-          created_at: new Date().toISOString(),
-        });
-
-      if (upsertError) {
-        throw new Error(`Failed to store coupon: ${upsertError.message}`);
-      }
-
-      setCouponCode(data.couponCode);
-      toast.success('Coupon generated successfully!');
-    } catch (error) {
-      console.error('Error generating coupon:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to generate coupon');
-    } finally {
-      setGeneratingCoupon(false);
     }
   };
 
@@ -341,12 +333,22 @@ const VendorDashboard: React.FC<VendorDashboardProps> = ({ vendor }) => {
           <div>
             <h2 className="text-lg font-semibold mb-2">Referral Program</h2>
             <p className="text-gray-600">
-              Generate a 10% off coupon for your clients to use on their first booking!
+              Generate a 10% off coupon for any vendors you work with to use on their first month!
             </p>
             {couponCode && (
-              <p className="text-gray-800 font-medium mt-2">
-                Your Coupon Code: <span className="text-primary">{couponCode}</span>
-              </p>
+              <div className="mt-2">
+                <p className="text-gray-800 font-medium">
+                  Your Coupon Code: <span className="text-primary">{couponCode}</span>
+                </p>
+                {stripeCouponId && (
+                  <p className="text-gray-600 text-sm">
+                    Stripe Coupon ID: <span className="text-primary">{stripeCouponId}</span>
+                  </p>
+                )}
+              </div>
+            )}
+            {couponError && (
+              <p className="text-red-600 text-sm mt-2">{couponError}</p>
             )}
           </div>
           <Button

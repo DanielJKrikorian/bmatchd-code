@@ -7,7 +7,7 @@ import { toast } from 'react-hot-toast';
 import BackToDashboard from '../components/BackToDashboard';
 
 interface SavedVendor {
-  id: string;
+  id: string; // ID from vendors table
   business_name: string;
   slug: string;
   location: string;
@@ -16,17 +16,7 @@ interface SavedVendor {
   images: string[];
   saved_at: string;
   notes?: string;
-}
-
-// Interface for raw Supabase response for vendors join
-interface SupabaseVendorResponse {
-  id: string;
-  business_name: string;
-  slug: string;
-  location: string;
-  rating: number;
-  price_range: string;
-  images: string[];
+  savedVendorId: string; // ID from saved_vendors table
 }
 
 const SavedVendors = () => {
@@ -43,7 +33,6 @@ const SavedVendors = () => {
         return;
       }
 
-      // First get the couple's ID
       const { data: coupleData, error: coupleError } = await supabase
         .from('couples')
         .select('id')
@@ -56,44 +45,51 @@ const SavedVendors = () => {
         return;
       }
 
-      // Then get saved vendors with full vendor details
-      const { data, error } = await supabase
+      // Fetch saved vendor IDs and metadata
+      const { data: savedData, error: savedError } = await supabase
         .from('saved_vendors')
-        .select(`
-          saved_at,
-          notes,
-          vendors (
-            id,
-            business_name,
-            slug,
-            location,
-            rating,
-            price_range,
-            images
-          )
-        `)
+        .select('id, saved_at, notes, vendor_id')
         .eq('couple_id', coupleData.id)
         .order('saved_at', { ascending: false });
 
-      if (error) throw error;
+      if (savedError) throw savedError;
 
-      // Type the response explicitly, handling vendors as an array
-      setSavedVendors(
-        data.map((item: { saved_at: string; notes?: string; vendors: SupabaseVendorResponse[] }) => ({
-          id: item.vendors[0].id,
-          business_name: item.vendors[0].business_name,
-          slug: item.vendors[0].slug,
-          location: item.vendors[0].location,
-          rating: item.vendors[0].rating,
-          price_range: item.vendors[0].price_range,
-          images: item.vendors[0].images,
-          saved_at: item.saved_at,
-          notes: item.notes
-        }))
-      );
+      if (!savedData || savedData.length === 0) {
+        setSavedVendors([]);
+        return;
+      }
+
+      // Fetch vendor details for each vendor_id
+      const vendorIds = savedData.map((item) => item.vendor_id);
+      const { data: vendorData, error: vendorError } = await supabase
+        .from('vendors')
+        .select('id, business_name, slug, location, rating, price_range, images')
+        .in('id', vendorIds);
+
+      if (vendorError) throw vendorError;
+
+      // Map saved vendors to include vendor details
+      const vendorsMap = new Map(vendorData.map((vendor) => [vendor.id, vendor]));
+      const combinedVendors = savedData
+        .map((item) => {
+          const vendor = vendorsMap.get(item.vendor_id);
+          if (!vendor) {
+            console.warn(`Vendor not found for vendor_id: ${item.vendor_id}`);
+            return null;
+          }
+          return {
+            ...vendor,
+            saved_at: item.saved_at,
+            notes: item.notes,
+            savedVendorId: item.id, // Track the saved_vendors.id for deletion
+          };
+        })
+        .filter((vendor): vendor is SavedVendor => vendor !== null);
+
+      setSavedVendors(combinedVendors);
     } catch (error) {
       console.error('Error loading saved vendors:', error);
-      toast.error('Failed to load saved vendors');
+      toast.error('Failed to load saved vendors. Please try again later.');
     } finally {
       setLoading(false);
     }
@@ -103,12 +99,11 @@ const SavedVendors = () => {
     loadSavedVendors();
   }, [loadSavedVendors]);
 
-  const removeFromSaved = async (vendorId: string) => {
+  const removeFromSaved = async (savedVendorId: string) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Get couple ID first
       const { data: coupleData, error: coupleError } = await supabase
         .from('couples')
         .select('id')
@@ -121,11 +116,11 @@ const SavedVendors = () => {
         .from('saved_vendors')
         .delete()
         .eq('couple_id', coupleData.id)
-        .eq('vendor_id', vendorId);
+        .eq('id', savedVendorId); // Use saved_vendors.id for deletion
 
       if (error) throw error;
 
-      setSavedVendors(prev => prev.filter(vendor => vendor.id !== vendorId));
+      setSavedVendors(prev => prev.filter(vendor => vendor.savedVendorId !== savedVendorId));
       toast.success('Vendor removed from saved list');
     } catch (error) {
       console.error('Error removing vendor:', error);
@@ -176,7 +171,7 @@ const SavedVendors = () => {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  removeFromSaved(vendor.id);
+                  removeFromSaved(vendor.savedVendorId); // Use saved_vendors.id
                 }}
                 className="absolute top-4 right-4 p-2 bg-white rounded-full shadow-sm hover:bg-gray-50"
               >

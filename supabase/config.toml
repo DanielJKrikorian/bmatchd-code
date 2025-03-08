@@ -2,8 +2,3 @@
 [functions]
 [functions.send-email]
 verify_jwt = false
-
-[functions.send-email.secrets]
-RESEND_API_KEY = "re_N93abFaT_7g7UsEFYbbbxZx7Gm7AZABrz"
-SUPABASE_URL = "https://rgzynxmllathqtaxhoii.supabase.co"
-SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnenlueG1sbGF0aHF0YXhob2lpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczNzY0MDg3MCwiZXhwIjoyMDUzMjE2ODcwfQ.zmN6QRrH72d64mZSbiMY3c031wwKjPqmn9JTPn1_maQ"

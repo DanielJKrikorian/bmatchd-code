@@ -26,6 +26,7 @@ interface Lead {
     location: string;
     rating: number;
     images: string[];
+    slug: string;
   };
   message_thread_id?: string | null;
 }
@@ -73,7 +74,8 @@ const MyWeddingTeam = () => {
             category,
             location,
             rating,
-            images
+            images,
+            slug
           )
         `)
         .eq('couple_id', coupleData.id)
@@ -94,21 +96,21 @@ const MyWeddingTeam = () => {
     try {
       const { error } = await supabase
         .from('leads')
-        .update({ status: 'declined' })
-        .eq('id', leadId);
+        .update({ status: "declined" })
+        .eq("id", leadId);
 
       if (error) throw error;
 
-      setLeads(prev =>
-        prev.map(lead =>
-          lead.id === leadId ? { ...lead, status: 'declined' } : lead
+      setLeads((prev) =>
+        prev.map((lead) =>
+          lead.id === leadId ? { ...lead, status: "declined" } : lead
         )
       );
 
-      toast.success('Inquiry closed successfully');
+      toast.success("Inquiry closed successfully");
     } catch (error) {
-      console.error('Error closing inquiry:', error);
-      toast.error('Failed to close inquiry');
+      console.error("Error closing inquiry:", error);
+      toast.error("Failed to close inquiry");
     }
   };
 
@@ -116,36 +118,36 @@ const MyWeddingTeam = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        navigate('/auth');
+        navigate("/auth");
         return;
       }
 
       // Create message thread
       const { data: thread, error: threadError } = await supabase
-        .from('message_threads')
+        .from("message_threads")
         .insert({
           vendor_id: lead.vendor.id,
-          couple_id: lead.couple_id
+          couple_id: lead.couple_id,
         })
         .select()
         .single();
 
-      if (threadError && !threadError.message.includes('duplicate key')) {
+      if (threadError && !threadError.message.includes("duplicate key")) {
         throw threadError;
       }
 
       // Update lead with message thread ID
       const { error: updateError } = await supabase
-        .from('leads')
+        .from("leads")
         .update({ message_thread_id: thread?.id })
-        .eq('id', lead.id);
+        .eq("id", lead.id);
 
       if (updateError) throw updateError;
 
-      navigate('/couple/messages');
+      navigate("/couple/messages");
     } catch (error) {
-      console.error('Error starting message thread:', error);
-      toast.error('Failed to start message thread');
+      console.error("Error starting message thread:", error);
+      toast.error("Failed to start message thread");
     }
   };
 
@@ -153,47 +155,45 @@ const MyWeddingTeam = () => {
     try {
       // Update lead status to booked
       const { error: leadError } = await supabase
-        .from('leads')
-        .update({ status: 'booked' })
-        .eq('id', lead.id);
+        .from("leads")
+        .update({ status: "booked" })
+        .eq("id", lead.id);
 
       if (leadError) throw leadError;
 
       // Create wedding appointment
       const { error: appointmentError } = await supabase
-        .from('appointments')
+        .from("appointments")
         .insert({
           vendor_id: lead.vendor_id,
           couple_id: lead.couple_id,
-          title: 'Wedding',
-          description: lead.venue_location 
+          title: "Wedding",
+          description: lead.venue_location
             ? `Venue: ${lead.venue_location}`
-            : 'Location to be determined',
+            : "Location to be determined",
           wedding_date: lead.wedding_date,
-          start_time: lead.wedding_date 
+          start_time: lead.wedding_date
             ? `${lead.wedding_date}T14:00:00` // 2 PM on wedding date
             : null,
-          status: 'confirmed'
+          status: "confirmed",
         });
 
       if (appointmentError) throw appointmentError;
 
       // Update local state
-      setLeads(prev =>
-        prev.map(l =>
-          l.id === lead.id ? { ...l, status: 'booked' } : l
-        )
+      setLeads((prev) =>
+        prev.map((l) => (l.id === lead.id ? { ...l, status: "booked" } : l))
       );
 
-      toast.success('Vendor booked and wedding appointment created!');
+      toast.success("Vendor booked and wedding appointment created!");
     } catch (error) {
-      console.error('Error booking vendor:', error);
-      toast.error('Failed to book vendor');
+      console.error("Error booking vendor:", error);
+      toast.error("Failed to book vendor");
     }
   };
 
-  const filteredLeads = leads.filter(lead => 
-    filter === 'all' ? true : lead.status === filter
+  const filteredLeads = leads.filter((lead) =>
+    filter === "all" ? true : lead.status === filter
   );
 
   if (loading) {
@@ -213,16 +213,18 @@ const MyWeddingTeam = () => {
           <p className="text-gray-600">Manage your vendor inquiries and bookings</p>
         </div>
         <div className="flex gap-2">
-          {(['all', 'pending', 'accepted', 'booked', 'declined'] as const).map((status) => (
-            <Button
-              key={status}
-              variant={filter === status ? 'default' : 'outline'}
-              onClick={() => setFilter(status)}
-              className="capitalize"
-            >
-              {status}
-            </Button>
-          ))}
+          {(["all", "pending", "accepted", "booked", "declined"] as const).map(
+            (status) => (
+              <Button
+                key={status}
+                variant={filter === status ? "default" : "outline"}
+                onClick={() => setFilter(status)}
+                className="capitalize"
+              >
+                {status}
+              </Button>
+            )
+          )}
         </div>
       </div>
 
@@ -231,11 +233,11 @@ const MyWeddingTeam = () => {
           <Store className="w-12 h-12 text-gray-400 mx-auto mb-4" />
           <h2 className="text-xl font-semibold mb-2">No inquiries found</h2>
           <p className="text-gray-600 mb-6">
-            {filter === 'all' 
-              ? 'Start exploring vendors and send them messages to build your wedding team.'
+            {filter === "all"
+              ? "Start exploring vendors and send them messages to build your wedding team."
               : `No ${filter} inquiries at the moment.`}
           </p>
-          <Button onClick={() => navigate('/vendors')}>
+          <Button onClick={() => navigate("/vendors")}>
             <Store className="w-4 h-4 mr-2" />
             Browse Vendors
           </Button>
@@ -243,14 +245,13 @@ const MyWeddingTeam = () => {
       ) : (
         <div className="space-y-4">
           {filteredLeads.map((lead) => (
-            <div
-              key={lead.id}
-              className="bg-white rounded-lg shadow-sm p-6"
-            >
+            <div key={lead.id} className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex justify-between items-start">
                 <div className="space-y-4">
                   <div>
-                    <h3 className="text-xl font-semibold mb-2">{lead.vendor.business_name}</h3>
+                    <h3 className="text-xl font-semibold mb-2">
+                      {lead.vendor.business_name}
+                    </h3>
                     <div className="flex items-center text-sm text-gray-600 gap-4">
                       <div className="flex items-center">
                         <MapPin className="w-4 h-4 mr-1" />
@@ -260,15 +261,15 @@ const MyWeddingTeam = () => {
                         <Star className="w-4 h-4 mr-1" />
                         {lead.vendor.rating.toFixed(1)}
                       </div>
-                      <div>
-                        {lead.vendor.category}
-                      </div>
+                      <div>{lead.vendor.category}</div>
                     </div>
                   </div>
 
                   {lead.additional_details && (
                     <div className="bg-gray-50 p-4 rounded-lg max-w-2xl">
-                      <p className="text-gray-600 whitespace-pre-wrap">{lead.additional_details}</p>
+                      <p className="text-gray-600 whitespace-pre-wrap">
+                        {lead.additional_details}
+                      </p>
                     </div>
                   )}
 
@@ -278,20 +279,22 @@ const MyWeddingTeam = () => {
                 </div>
 
                 <div className="flex flex-col items-end gap-4">
-                  <span className={`px-3 py-1 rounded-full text-sm ${
-                    lead.status === 'accepted' 
-                      ? 'bg-green-100 text-green-800' 
-                      : lead.status === 'declined'
-                      ? 'bg-red-100 text-red-800'
-                      : lead.status === 'booked'
-                      ? 'bg-blue-100 text-blue-800'
-                      : 'bg-yellow-100 text-yellow-800'
-                  }`}>
+                  <span
+                    className={`px-3 py-1 rounded-full text-sm ${
+                      lead.status === "accepted"
+                        ? "bg-green-100 text-green-800"
+                        : lead.status === "declined"
+                        ? "bg-red-100 text-red-800"
+                        : lead.status === "booked"
+                        ? "bg-blue-100 text-blue-800"
+                        : "bg-yellow-100 text-yellow-800"
+                    }`}
+                  >
                     {lead.status.charAt(0).toUpperCase() + lead.status.slice(1)}
                   </span>
 
                   <div className="flex gap-2">
-                    {lead.status === 'pending' && (
+                    {lead.status === "pending" && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -302,12 +305,14 @@ const MyWeddingTeam = () => {
                         Close Inquiry
                       </Button>
                     )}
-                    {lead.status === 'accepted' && (
+                    {lead.status === "accepted" && (
                       <>
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => navigate(`/appointments/request?vendor=${lead.vendor.id}`)}
+                          onClick={() =>
+                            navigate(`/appointments/request?vendor=${lead.vendor.id}`)
+                          }
                         >
                           <Calendar className="w-4 h-4 mr-1" />
                           Schedule Consultation
@@ -315,10 +320,14 @@ const MyWeddingTeam = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => lead.message_thread_id ? navigate('/messages') : handleStartMessage(lead)}
+                          onClick={() =>
+                            lead.message_thread_id
+                              ? navigate("/couple/messages")
+                              : handleStartMessage(lead)
+                          }
                         >
                           <MessageSquare className="w-4 h-4 mr-1" />
-                          {lead.message_thread_id ? 'View Messages' : 'Start Message'}
+                          {lead.message_thread_id ? "View Messages" : "Start Message"}
                         </Button>
                         <Button
                           size="sm"
@@ -330,12 +339,12 @@ const MyWeddingTeam = () => {
                         </Button>
                       </>
                     )}
-                    {lead.status === 'booked' && (
+                    {lead.status === "booked" && (
                       <>
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => navigate('/calendar')}
+                          onClick={() => navigate("/appointments")} // Updated to /appointments
                         >
                           <Calendar className="w-4 h-4 mr-1" />
                           View Appointments
@@ -344,7 +353,7 @@ const MyWeddingTeam = () => {
                           variant="destructive"
                           size="sm"
                           onClick={() => {
-                            navigate(`/vendors/${lead.vendor.id}#reviews`);
+                            navigate(`/vendors/${lead.vendor.slug}#reviews`);
                           }}
                         >
                           <Star className="w-4 h-4 mr-1" />
@@ -353,7 +362,7 @@ const MyWeddingTeam = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => navigate('/messages')}
+                          onClick={() => navigate("/couple/messages")} // Updated to /couple/messages
                         >
                           <MessageSquare className="w-4 h-4 mr-1" />
                           View Messages
@@ -363,7 +372,7 @@ const MyWeddingTeam = () => {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => navigate(`/vendors/${lead.vendor.id}`)}
+                      onClick={() => navigate(`/vendors/${lead.vendor.slug}`)}
                     >
                       View Profile
                       <ArrowRight className="w-4 h-4 ml-1" />
