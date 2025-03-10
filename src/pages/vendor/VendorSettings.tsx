@@ -111,8 +111,7 @@ const VendorSettings = () => {
         primaryImage: vendorData.primary_image || 0,
         serviceAreas: serviceAreas,
         yearsExperience: vendorData.years_experience || '',
-        specialties: specialties,
-        slug: vendorData.slug || ''
+        specialties: specialties
       });
       console.log('Loaded formData:', formData); // Debug log
     } catch (error) {
@@ -152,30 +151,11 @@ const VendorSettings = () => {
 
       if (!vendorData) throw new Error('Vendor not found');
 
-      let slug = formData.slug.trim() || vendorData.slug; // Keep original slug if not manually changed
+      let slug = vendorData.slug; // Keep the existing slug
 
       if (!slug) {
-        slug = generateSlug(formData.businessName);
-      } else if (formData.businessName && generateSlug(formData.businessName) !== slug) {
-        try {
-          const { data: existingVendor, error } = await supabase
-            .from('vendors')
-            .select('slug')
-            .eq('user_id', user.id)
-            .single();
-
-          if (error) {
-            console.error("Error fetching existing vendor:", error);
-          }
-
-          if (existingVendor?.slug === slug) {
-            slug = generateSlug(formData.businessName);
-          }
-        } catch (fetchError) {
-          console.error("Unexpected error fetching vendor slug:", fetchError);
-        }
+        slug = generateSlug(formData.businessName); // Only generate if it was missing
       }
-
 
       const updates = {
         business_name: formData.businessName,
@@ -193,8 +173,7 @@ const VendorSettings = () => {
         videos: formData.videos,
         primary_image: formData.primaryImage,
         years_experience: formData.yearsExperience,
-        specialties: formData.specialties,
-        slug: slug
+        specialties: formData.specialties
       };
 
       const { error: vendorError } = await supabase
@@ -299,18 +278,6 @@ const VendorSettings = () => {
                     onChange={handleChange}
                     className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary/50 focus:outline-none"
                     required
-                  />
-                </div>
-                <div>
-                  <label htmlFor="slug" className="block text-sm font-medium text-gray-700">Slug (optional)</label>
-                  <input
-                    type="text"
-                    id="slug"
-                    name="slug"
-                    value={formData.slug}
-                    onChange={handleChange}
-                    className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary/50 focus:outline-none"
-                    placeholder="e.g., my-business-slug"
                   />
                 </div>
               </div>
