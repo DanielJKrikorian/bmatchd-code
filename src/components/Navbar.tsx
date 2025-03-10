@@ -4,7 +4,7 @@ import { Search, MessageSquare, UserCircle, Heart, Menu, X } from 'lucide-react'
 import { Button } from './ui/button';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
-import NotificationBell from './NotificationBell';
+// import NotificationBell from './NotificationBell'; // Comment out
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -14,23 +14,21 @@ const Navbar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const fetchUserRole = async (userId: string, userMetadata: any) => {
-    // Fallback to metadata if available
     if (userMetadata?.role) {
       console.log('Navbar: Using role from metadata:', userMetadata.role);
       return userMetadata.role;
     }
 
-    // Retry logic for fetching role from users table
     let attempts = 0;
     const maxAttempts = 3;
-    const delay = 2000; // 2 seconds between retries
+    const delay = 2000;
 
     while (attempts < maxAttempts) {
       const { data: userData, error } = await supabase
         .from('users')
         .select('role')
         .eq('id', userId)
-        .maybeSingle(); // Use maybeSingle to handle no rows gracefully
+        .maybeSingle();
 
       if (error) {
         console.error('Error fetching user role (attempt ' + (attempts + 1) + '):', error);
@@ -71,7 +69,6 @@ const Navbar = () => {
   };
 
   useEffect(() => {
-    // Debug: Log initial session on mount
     supabase.auth.getSession().then(({ data, error }) => {
       console.log('Navbar Initial Session:', {
         session: data.session,
@@ -93,7 +90,6 @@ const Navbar = () => {
         setIsAuthenticated(true);
         const role = await fetchUserRole(session.user.id, session.user.user_metadata);
         setUserRole(role);
-        // Redirect to dashboard only if on home page and vendor
         if (event === 'INITIAL_SESSION' && role === 'vendor' && location.pathname === '/') {
           navigate('/dashboard');
         }
@@ -101,7 +97,6 @@ const Navbar = () => {
         setIsAuthenticated(false);
         setUserRole(null);
         console.log('Navbar: No user authenticated');
-        // Only redirect to signin if on a protected route and not already navigating to signin
         const protectedRoutes = [
           '/dashboard',
           '/vendor/messages',
@@ -199,7 +194,7 @@ const Navbar = () => {
                     </Link>
                   </>
                 )}
-                {userRole === 'vendor' && <NotificationBell />}
+                {/* {userRole === 'vendor' && <NotificationBell />} */} {/* Comment out */}
                 <Button variant="ghost" onClick={handleLogout}>
                   Sign Out
                 </Button>
@@ -276,11 +271,11 @@ const Navbar = () => {
                       </Link>
                     </>
                   )}
-                  {userRole === 'vendor' && (
+                  {/* {userRole === 'vendor' && (
                     <div className="block px-4 py-3 text-gray-600">
                       <NotificationBell />
                     </div>
-                  )}
+                  )} */} {/* Comment out */}
                   <button
                     onClick={() => {
                       handleLogout();

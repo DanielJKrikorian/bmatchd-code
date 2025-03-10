@@ -1,54 +1,43 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import commonjs from '@rollup/plugin-commonjs';
-import { nodeResolve } from '@rollup/plugin-node-resolve';
+import path from 'path';
 
 export default defineConfig({
-  plugins: [
-    react(),
-    commonjs(),
-    nodeResolve({
-      preferBuiltins: true,
-      mainFields: ['module', 'main'],
-    }),
-  ],
+  plugins: [react()],
   optimizeDeps: {
     include: [
       'react',
       'react-dom',
-      'react-router',
       'react-router-dom',
       'react-hot-toast',
       '@supabase/supabase-js',
       '@supabase/postgrest-js',
-      'shallowequal',
+      'zustand',
+      'lucide-react'
     ],
-    exclude: ['lucide-react'],
+    force: true,
   },
   resolve: {
     alias: {
-      // Point directly to the React and React-DOM entry points
-      'react': '/Users/danielkrikorian/Desktop/bmatchd-code/node_modules/react/index.js',
-      'react-dom': '/Users/danielkrikorian/Desktop/bmatchd-code/node_modules/react-dom/index.js',
-      // Map jsx-runtime correctly
-      'react/jsx-runtime': '/Users/danielkrikorian/Desktop/bmatchd-code/node_modules/react/jsx-runtime.js',
+      react: path.resolve(__dirname, 'node_modules/react'),
+      'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
     },
+    dedupe: ['react', 'react-dom', '@supabase/supabase-js'],
   },
   build: {
     target: 'esnext',
+    sourcemap: true,
+    minify: false, // 🚀 Disable minification to prevent tree-shaking issues
     commonjsOptions: {
-      transformMixedEsModules: true,
-      include: [
-        /node_modules\/@supabase\/postgrest-js/,
-        /node_modules\/@supabase\/supabase-js/,
-        /node_modules\/react/,
-        /node_modules\/react-dom/,
-        /node_modules\/react-router/,
-        /node_modules\/react-router-dom/,
-        /node_modules\/react-hot-toast/,
-        /node_modules\/shallowequal/,
-      ],
+      include: [/node_modules/], // 🚀 Ensure CommonJS modules are not removed
     },
+    rollupOptions: {
+      external: [], // 🚀 Ensure all dependencies are bundled
+      output: {
+        manualChunks: undefined, // 🚀 Prevent Vite from separating chunks
+      },
+    },
+    chunkSizeWarningLimit: 5000, // 🚀 Allow large chunks to prevent missing pages
   },
   server: {
     hmr: {

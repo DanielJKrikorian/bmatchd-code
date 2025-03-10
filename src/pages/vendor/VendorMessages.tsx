@@ -33,7 +33,8 @@ const VendorMessages = () => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    checkVendorAccess();
+    console.log("🚀 Checking Vendor Access...");
+    checkVendorAccess().catch(err => console.error("❌ Error in checkVendorAccess:", err));
   }, []);
 
   useEffect(() => {
