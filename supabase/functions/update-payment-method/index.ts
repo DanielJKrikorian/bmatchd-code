@@ -32,29 +32,48 @@ serve(async (req) => {
     }
 
     const body = JSON.parse(textBody);
-    const { stripe_subscription_id } = body;
+    const { action, customer_id, payment_method_id } = body;
 
-    if (!stripe_subscription_id) {
-      return new Response(JSON.stringify({ error: "Missing stripe_subscription_id" }), {
+    if (!action || !customer_id || typeof customer_id !== "string") {
+      return new Response(JSON.stringify({ error: "Invalid or missing action/customer_id" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 400,
       });
     }
 
-    const subscription = await stripe.subscriptions.retrieve(stripe_subscription_id);
+    if (action === "create_setup_intent") {
+      const setupIntent = await stripe.setupIntents.create({
+        customer: customer_id,
+      });
+      return new Response(JSON.stringify({ client_secret: setupIntent.client_secret }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
 
-    const response = {
-      current_period_end: subscription.current_period_end,
-      cancel_at_period_end: subscription.cancel_at_period_end || false,
-      pending_update: subscription.pending_update || null,
-    };
+    if (action === "update_payment_method") {
+      if (!payment_method_id || typeof payment_method_id !== "string") {
+        return new Response(JSON.stringify({ error: "Invalid or missing payment_method_id" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400,
+        });
+      }
 
-    return new Response(JSON.stringify(response), {
+      await stripe.customers.update(customer_id, {
+        invoice_settings: { default_payment_method: payment_method_id },
+      });
+      return new Response(JSON.stringify({ message: "Payment method updated successfully" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
+    return new Response(JSON.stringify({ error: "Invalid action" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
+      status: 400,
     });
   } catch (error) {
-    console.error("get-subscription-details: Error:", error);
+    console.error("update-payment-method: Error:", error);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,

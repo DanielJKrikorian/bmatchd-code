@@ -29,7 +29,7 @@
     "@stripe/react-stripe-js": "^3.3.0",
     "@stripe/stripe-js": "^5.8.0",
     "@supabase/postgrest-js": "^1.15.0",
-    "@supabase/supabase-js": "^2.43.4",
+    "@supabase/supabase-js": "^2.45.0",
     "@types/react-router-dom": "^5.3.3",
     "axios": "^1.8.1",
     "body-parser": "^1.20.3",
@@ -50,15 +50,19 @@
     "react-dom": "^18.3.1",
     "react-helmet-async": "^2.0.5",
     "react-hot-toast": "^2.5.2",
-    "react-router-dom": "^6.30.0",
+    "react-router": "^7.3.0",
+    "react-router-dom": "^7.3.0",
     "send": "^1.1.0",
-    "stripe": "^15.6.0",
+    "shallowequal": "^1.1.0",
+    "stripe": "^15.12.0",
     "tailwind-merge": "^2.3.0",
     "tar": "^7.4.3",
     "word-wrap": "^1.2.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",
+    "@rollup/plugin-commonjs": "^28.0.3",
+    "@rollup/plugin-node-resolve": "^16.0.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
     "@testing-library/user-event": "^14.6.1",
@@ -83,5 +87,20 @@
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.3.0",
     "vite": "^6.2.0"
+  },
+  "resolutions": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "browserslist": [">0.2%", "not dead", "not op_mini all"],
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "netlify": {
+    "functions": "netlify/functions",
+    "build": {
+      "command": "npm run build",
+      "publish": "dist"
+    }
   }
 }
