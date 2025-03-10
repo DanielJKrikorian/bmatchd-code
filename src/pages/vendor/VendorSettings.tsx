@@ -153,16 +153,29 @@ const VendorSettings = () => {
       if (!vendorData) throw new Error('Vendor not found');
 
       let slug = formData.slug.trim() || vendorData.slug; // Keep original slug if not manually changed
-      else if (formData.businessName && generateSlug(formData.businessName) !== slug) {
-        const originalSlug = (await supabase
-          .from('vendors')
-          .select('slug')
-          .eq('user_id', user.id)
-          .single()).data?.slug || '';
-        if (originalSlug === slug) {
-          slug = generateSlug(formData.businessName);
+
+      if (!slug) {
+        slug = generateSlug(formData.businessName);
+      } else if (formData.businessName && generateSlug(formData.businessName) !== slug) {
+        try {
+          const { data: existingVendor, error } = await supabase
+            .from('vendors')
+            .select('slug')
+            .eq('user_id', user.id)
+            .single();
+
+          if (error) {
+            console.error("Error fetching existing vendor:", error);
+          }
+
+          if (existingVendor?.slug === slug) {
+            slug = generateSlug(formData.businessName);
+          }
+        } catch (fetchError) {
+          console.error("Unexpected error fetching vendor slug:", fetchError);
         }
       }
+
 
       const updates = {
         business_name: formData.businessName,
