@@ -152,10 +152,8 @@ const VendorSettings = () => {
 
       if (!vendorData) throw new Error('Vendor not found');
 
-      let slug = formData.slug.trim();
-      if (!slug) {
-        slug = generateSlug(formData.businessName);
-      } else if (formData.businessName && generateSlug(formData.businessName) !== slug) {
+      let slug = formData.slug.trim() || vendorData.slug; // Keep original slug if not manually changed
+      else if (formData.businessName && generateSlug(formData.businessName) !== slug) {
         const originalSlug = (await supabase
           .from('vendors')
           .select('slug')
