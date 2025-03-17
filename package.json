@@ -43,6 +43,7 @@
     "follow-redirects": "^1.15.9",
     "http-proxy-middleware": "^3.0.3",
     "lucide-react": "^0.344.0",
+    "micro": "^10.0.1",
     "nanoid": "^5.1.2",
     "path-to-regexp": "^8.2.0",
     "qrcode": "^1.5.3",
