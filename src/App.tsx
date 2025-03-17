@@ -61,6 +61,7 @@ import CoupleProfile from './pages/CoupleProfile';
 import MealOptions from './pages/wedding/MealOptions';
 import PaymentPage from './pages/PaymentPage';
 import { PackageProvider } from './context/PackageContext';
+import VendorLanding from './pages/VendorLanding'; // Updated to point to src/pages/
 
 function App() {
   return (
@@ -146,6 +147,7 @@ function App() {
                   <Route path="/wedding/meals" element={<MealOptions />} />
                   <Route path="/couples/:id" element={<CoupleProfile />} />
                   <Route path="/subscription/payment" element={<PaymentPage />} />
+                  <Route path="/vendors-landing" element={<VendorLanding />} />
                 </Routes>
               </main>
               <Footer />
