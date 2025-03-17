@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Heart, MapPin, DollarSign, Star, MessageSquare, Globe, Facebook, Instagram, Youtube, Calendar, Loader2, Send } from 'lucide-react';
+import { Heart, MapPin, DollarSign, Star, MessageSquare, Globe, Facebook, Instagram, Youtube, Loader2, Send, ArrowLeft, ArrowRight } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
@@ -29,6 +29,7 @@ interface Package {
 
 interface Vendor {
   id: string;
+  user_id: string;
   business_name: string;
   slug: string;
   description: string;
@@ -67,13 +68,23 @@ const VendorProfile = () => {
     rating: 0,
     content: '',
     reviewerName: '',
-    reviewerEmail: ''
+    reviewerEmail: '',
   });
   const [showInquiryModal, setShowInquiryModal] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
   const [inquiryForm, setInquiryForm] = useState({
-    name: '',
+    partner1Name: '',
+    partner2Name: '',
     email: '',
-    message: ''
+    phone: '',
+    weddingDate: '',
+    budget: '',
+    guestCount: '',
+    venueLocation: '',
+    message: '',
+    preferredContactMethod: 'email' as 'email' | 'phone',
+    servicePackage: '',
+    timeframe: '',
   });
   const [submittingInquiry, setSubmittingInquiry] = useState(false);
 
@@ -81,21 +92,18 @@ const VendorProfile = () => {
 
   useEffect(() => {
     if (!slug) {
-      console.log('[LOAD] No slug provided, redirecting to /vendors');
       navigate('/vendors');
       return;
     }
     loadVendorData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, navigate]);
 
   const loadVendorData = async () => {
     try {
-      console.log('[LOAD] Starting loadVendorData for vendor slug:', slug);
       const { data: vendorData, error: vendorError } = await supabase
         .from('vendors')
         .select(`
-          id, business_name, slug, description, location, price_range, rating,
+          id, user_id, business_name, slug, description, location, price_range, rating,
           images, primary_image, videos,
           website_url, facebook_url, instagram_url, youtube_url,
           reviews (
@@ -110,35 +118,23 @@ const VendorProfile = () => {
 
       if (vendorError) throw vendorError;
       if (!vendorData) {
-        console.log('[LOAD] No vendor data found for slug:', slug);
         toast.error('Vendor not found');
         navigate('/vendors');
         return;
       }
 
-      console.log('[LOAD] Vendor data loaded:', JSON.stringify(vendorData));
       setVendor(vendorData);
       setReviews((vendorData.reviews || []).map(review => ({
         ...review,
-        couple: review.couple ? review.couple as { partner1_name: string; partner2_name: string }[] : null
+        couple: review.couple && review.couple.length > 0 ? review.couple as { partner1_name: string; partner2_name: string }[] : null,
       })));
 
       const { data: packagesData, error: packagesError } = await supabase
         .from('vendor_packages')
         .select('*')
         .eq('vendor_id', vendorData.id);
-
       if (packagesError) throw packagesError;
-      const loadedPackages = packagesData || [];
-      const savedOrder = localStorage.getItem(`packageOrder_${vendorData.id}`);
-      if (savedOrder) {
-        const orderedPackages = JSON.parse(savedOrder)
-          .map((pkgId: string) => loadedPackages.find((pkg: Package) => pkg.id === pkgId))
-          .filter(Boolean);
-        setPackages(orderedPackages);
-      } else {
-        setPackages(loadedPackages);
-      }
+      setPackages(packagesData || []);
 
       const { error: viewError } = await supabase
         .from('vendor_profile_views')
@@ -159,19 +155,26 @@ const VendorProfile = () => {
         if (userData?.role === 'couple') {
           const { data: coupleData, error: coupleError } = await supabase
             .from('couples')
-            .select('id')
+            .select('id, partner1_name, partner2_name, wedding_date, budget')
             .eq('user_id', authUser.user.id)
             .single();
           if (coupleError) throw coupleError;
           if (coupleData) {
             setUserCoupleId(coupleData.id);
-            const { data: savedVendor, error: saveError } = await supabase
+            setInquiryForm(prev => ({
+              ...prev,
+              partner1Name: coupleData.partner1_name || '',
+              partner2Name: coupleData.partner2_name || '',
+              email: authUser.user.email || '',
+              weddingDate: coupleData.wedding_date || '',
+              budget: coupleData.budget?.toString() || '',
+            }));
+            const { data: savedVendor } = await supabase
               .from('saved_vendors')
               .select('id')
               .eq('couple_id', coupleData.id)
               .eq('vendor_id', vendorData.id)
               .maybeSingle();
-            if (saveError) console.error('[LOAD] Saved vendor fetch error:', saveError);
             setIsSaved(!!savedVendor);
           }
         }
@@ -229,35 +232,105 @@ const VendorProfile = () => {
     }
   };
 
-  const handleInquiryChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleInquiryChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setInquiryForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const submitInquiry = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inquiryForm.email || !inquiryForm.message) {
-      toast.error('Please fill out email and message');
+  const handleNextStep = () => {
+    const step = steps[currentStep];
+    const requiredFields = step.fields.filter(f => ['partner1Name', 'partner2Name', 'email', 'servicePackage', 'timeframe', 'message'].includes(f));
+    const isValid = requiredFields.every(field => inquiryForm[field as keyof typeof inquiryForm]);
+    if (!isValid) {
+      toast.error('Please fill out all required fields');
       return;
     }
-    setSubmittingInquiry(true);
+    setCurrentStep(prev => prev + 1);
+  };
 
+  const handlePrevStep = () => setCurrentStep(prev => prev - 1);
+
+  const submitInquiry = async () => {
+    setSubmittingInquiry(true);
     try {
-      const inquiryData = {
+      const selectedPackage = packages.find(pkg => pkg.id === inquiryForm.servicePackage);
+      const packageName = selectedPackage ? selectedPackage.name : inquiryForm.servicePackage === 'Custom Package' ? 'Custom Package' : '';
+      const messageId = crypto.randomUUID();
+      const now = new Date().toISOString();
+
+      const inquiry = {
         vendor_id: vendor!.id,
         couple_id: userCoupleId,
-        email: inquiryForm.email.trim(),
-        message: inquiryForm.message,
-        name: inquiryForm.name || 'Anonymous'
+        message_id: messageId,
+        wedding_date: inquiryForm.weddingDate || null,
+        budget: inquiryForm.budget ? parseFloat(inquiryForm.budget) : null,
+        guest_count: inquiryForm.guestCount ? parseInt(inquiryForm.guestCount, 10) : null,
+        venue_location: inquiryForm.venueLocation || null,
+        inquiry_type: packageName || null,
+        additional_details: `
+Service Package: ${packageName}
+Planning Timeframe: ${inquiryForm.timeframe}
+Preferred Contact: ${inquiryForm.preferredContactMethod}
+Phone: ${inquiryForm.phone || 'Not provided'}
+
+Message:
+${inquiryForm.message}
+        `.trim() || null,
+        status: 'pending',
       };
 
-      const { error } = await supabase
-        .from('vendor_inquiries')
-        .insert([inquiryData]);
-      if (error) throw error;
+      const { error: leadError } = await supabase.from('leads').insert([inquiry]);
+      if (leadError) throw leadError;
+
+      // Step 1: Check for an existing thread or create a new one
+      let threadId;
+      const { data: existingThread, error: fetchThreadError } = await supabase
+        .from('message_threads')
+        .select('id')
+        .eq('vendor_id', vendor!.id)
+        .eq('couple_id', userCoupleId)
+        .maybeSingle();
+
+      if (fetchThreadError && fetchThreadError.code !== 'PGRST116') throw fetchThreadError; // PGRST116 = no rows found
+
+      if (existingThread) {
+        threadId = existingThread.id;
+        // Update last_message_at for the existing thread
+        const { error: updateThreadError } = await supabase
+          .from('message_threads')
+          .update({ last_message_at: now })
+          .eq('id', threadId);
+        if (updateThreadError) throw updateThreadError;
+      } else {
+        threadId = crypto.randomUUID();
+        const thread = {
+          id: threadId,
+          vendor_id: vendor!.id,
+          couple_id: userCoupleId,
+          last_message_at: now,
+          created_at: now,
+          thread_status: 'active',
+        };
+        const { error: threadError } = await supabase.from('message_threads').insert([thread]);
+        if (threadError) throw threadError;
+      }
+
+      // Step 2: Insert the message with the thread ID
+      const message = {
+        id: crypto.randomUUID(),
+        sender_id: user!.id,
+        receiver_id: vendor!.user_id,
+        content: inquiryForm.message,
+        message_thread_id: threadId,
+        status: 'pending',
+        created_at: now,
+      };
+
+      const { error: messageError } = await supabase.from('messages').insert([message]);
+      if (messageError) throw messageError;
 
       toast.success('Inquiry sent successfully!');
-      setInquiryForm({ name: '', email: '', message: '' });
       setShowInquiryModal(false);
+      setCurrentStep(0);
     } catch (error) {
       console.error('[INQUIRY] Error:', error);
       toast.error('Failed to send inquiry');
@@ -304,9 +377,7 @@ const VendorProfile = () => {
         reviewData.reviewer_email = reviewForm.reviewerEmail.trim();
       }
 
-      const { error } = await supabase
-        .from('reviews')
-        .insert([reviewData]);
+      const { error } = await supabase.from('reviews').insert([reviewData]);
       if (error) throw error;
 
       toast.success('Review submitted!');
@@ -325,7 +396,7 @@ const VendorProfile = () => {
     const [editForm, setEditForm] = useState({
       rating: review.rating,
       content: review.content,
-      reviewerEmail: ''
+      reviewerEmail: '',
     });
 
     const handleEditChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -405,11 +476,9 @@ const VendorProfile = () => {
     return (
       <div className="mt-2">
         {!editMode ? (
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setEditMode(true)}>
-              Edit
-            </Button>
-          </div>
+          <Button variant="outline" size="sm" onClick={() => setEditMode(true)}>
+            Edit
+          </Button>
         ) : (
           <form onSubmit={submitEdit} className="space-y-2">
             <input
@@ -452,6 +521,206 @@ const VendorProfile = () => {
         )}
       </div>
     );
+  };
+
+  const steps = [
+    { title: 'Your Information', fields: ['partner1Name', 'partner2Name'] },
+    { title: 'Contact Information', fields: ['email', 'phone', 'preferredContactMethod'] },
+    { title: 'Wedding Date', fields: ['weddingDate'] },
+    { title: 'Guest Count', fields: ['guestCount'] },
+    { title: 'Venue Location', fields: ['venueLocation'] },
+    { title: 'Budget', fields: ['budget'] },
+    { title: 'Service Package', fields: ['servicePackage'] },
+    { title: 'Planning Timeframe', fields: ['timeframe'] },
+    { title: 'Message', fields: ['message'] },
+  ];
+
+  const renderStep = () => {
+    const step = steps[currentStep];
+    switch (step.title) {
+      case 'Your Information':
+        return (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Partner 1 Name *</label>
+              <input
+                type="text"
+                name="partner1Name"
+                value={inquiryForm.partner1Name}
+                onChange={handleInquiryChange}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary/50 focus:outline-none"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Partner 2 Name *</label>
+              <input
+                type="text"
+                name="partner2Name"
+                value={inquiryForm.partner2Name}
+                onChange={handleInquiryChange}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary/50 focus:outline-none"
+                required
+              />
+            </div>
+          </div>
+        );
+      case 'Contact Information':
+        return (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Email *</label>
+              <input
+                type="email"
+                name="email"
+                value={inquiryForm.email}
+                onChange={handleInquiryChange}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary/50 focus:outline-none"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Phone</label>
+              <input
+                type="tel"
+                name="phone"
+                value={inquiryForm.phone}
+                onChange={handleInquiryChange}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary/50 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Preferred Contact Method</label>
+              <select
+                name="preferredContactMethod"
+                value={inquiryForm.preferredContactMethod}
+                onChange={handleInquiryChange}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary/50 focus:outline-none"
+              >
+                <option value="email">Email</option>
+                <option value="phone">Phone</option>
+              </select>
+            </div>
+          </div>
+        );
+      case 'Wedding Date':
+        return (
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Wedding Date</label>
+            <input
+              type="date"
+              name="weddingDate"
+              value={inquiryForm.weddingDate}
+              onChange={handleInquiryChange}
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary/50 focus:outline-none"
+            />
+          </div>
+        );
+      case 'Guest Count':
+        return (
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Estimated Guest Count</label>
+            <input
+              type="number"
+              name="guestCount"
+              value={inquiryForm.guestCount}
+              onChange={handleInquiryChange}
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary/50 focus:outline-none"
+              min="1"
+            />
+          </div>
+        );
+      case 'Venue Location':
+        return (
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Venue Location</label>
+            <input
+              type="text"
+              name="venueLocation"
+              value={inquiryForm.venueLocation}
+              onChange={handleInquiryChange}
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary/50 focus:outline-none"
+            />
+          </div>
+        );
+      case 'Budget':
+        return (
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Budget Range</label>
+            <select
+              name="budget"
+              value={inquiryForm.budget}
+              onChange={handleInquiryChange}
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary/50 focus:outline-none"
+            >
+              <option value="">Select budget range</option>
+              <option value="15000">Under $15,000</option>
+              <option value="25000">$15,000 - $25,000</option>
+              <option value="35000">$25,000 - $35,000</option>
+              <option value="50000">$35,000 - $50,000</option>
+              <option value="75000">$50,000 - $75,000</option>
+              <option value="100000">$75,000 - $100,000</option>
+              <option value="150000">$100,000 - $150,000</option>
+              <option value="200000">$150,000 - $200,000</option>
+              <option value="250000">Over $200,000</option>
+            </select>
+          </div>
+        );
+      case 'Service Package':
+        return (
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Service Package *</label>
+            <select
+              name="servicePackage"
+              value={inquiryForm.servicePackage}
+              onChange={handleInquiryChange}
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary/50 focus:outline-none"
+              required
+            >
+              <option value="">Select a package</option>
+              {packages.map(pkg => (
+                <option key={pkg.id} value={pkg.id}>{pkg.name}</option>
+              ))}
+              <option value="Custom Package">Custom Package</option>
+            </select>
+          </div>
+        );
+      case 'Planning Timeframe':
+        return (
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Planning Timeframe *</label>
+            <select
+              name="timeframe"
+              value={inquiryForm.timeframe}
+              onChange={handleInquiryChange}
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary/50 focus:outline-none"
+              required
+            >
+              <option value="">Select planning timeframe</option>
+              <option value="Immediate">Immediate (within 1 month)</option>
+              <option value="Soon">Soon (1-3 months)</option>
+              <option value="Planning Ahead">Planning Ahead (3-6 months)</option>
+              <option value="Early Planning">Early Planning (6+ months)</option>
+            </select>
+          </div>
+        );
+      case 'Message':
+        return (
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Message *</label>
+            <textarea
+              name="message"
+              value={inquiryForm.message}
+              onChange={handleInquiryChange}
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary/50 focus:outline-none"
+              rows={4}
+              required
+            />
+          </div>
+        );
+      default:
+        return null;
+    }
   };
 
   if (loading) return (
@@ -599,7 +868,9 @@ const VendorProfile = () => {
                       <span className="text-gray-600">{new Date(review.created_at).toLocaleDateString()}</span>
                     </div>
                     <p className="font-medium mb-2">
-                      {review.couple && review.couple.length > 0 ? `${review.couple[0].partner1_name} & ${review.couple[0].partner2_name}` : review.reviewer_name || 'Anonymous'}
+                      {review.couple_id && review.couple && review.couple.length > 0 
+                        ? `${review.couple[0].partner1_name} & ${review.couple[0].partner2_name}` 
+                        : review.reviewer_name || 'Anonymous'}
                     </p>
                     <p className="text-gray-600">{review.content}</p>
                     {review.response && (
@@ -688,23 +959,10 @@ const VendorProfile = () => {
               <div className="flex items-center justify-between"><span className="text-gray-600">Videos</span><span>{vendor.videos.length}</span></div>
             </div>
             <div className="space-y-3">
-              <Button 
-                className="w-full" 
-                onClick={handleInquiryClick}
-              >
+              <Button className="w-full" onClick={handleInquiryClick}>
                 <MessageSquare className="w-4 h-4 mr-2" />
                 {userRole === 'couple' ? 'Inquire Now' : 'Sign in to Inquire'}
               </Button>
-              {userRole === 'couple' && (
-                <Button 
-                  variant="outline" 
-                  className="w-full" 
-                  onClick={() => navigate(`/appointments/request?vendor=${vendor.id}`)}
-                >
-                  <Calendar className="w-4 h-4 mr-2" />
-                  Schedule Consultation
-                </Button>
-              )}
             </div>
           </div>
         </div>
@@ -713,57 +971,37 @@ const VendorProfile = () => {
       {showInquiryModal && userRole === 'couple' && (
         <div className="fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-xl font-semibold mb-4">Inquire About {vendor.business_name}</h3>
-            <form onSubmit={submitInquiry} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Your Name (optional)</label>
-                <input
-                  type="text"
-                  name="name"
-                  value={inquiryForm.name}
-                  onChange={handleInquiryChange}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary/50 focus:outline-none"
-                  placeholder="Enter your name"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Your Email</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={inquiryForm.email}
-                  onChange={handleInquiryChange}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary/50 focus:outline-none"
-                  placeholder="Enter your email"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Message</label>
-                <textarea
-                  name="message"
-                  value={inquiryForm.message}
-                  onChange={handleInquiryChange}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary/50 focus:outline-none"
-                  rows={4}
-                  placeholder="Your message..."
-                  required
-                />
-              </div>
-              <div className="flex gap-2 justify-end">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => setShowInquiryModal(false)}
-                >
-                  Cancel
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-semibold">
+                {currentStep < steps.length - 1 ? steps[currentStep].title : 'Review and Send'}
+              </h3>
+              <span className="text-sm text-gray-500">Step {currentStep + 1} of {steps.length}</span>
+            </div>
+            {renderStep()}
+            <div className="flex justify-between mt-6">
+              {currentStep > 0 && (
+                <Button variant="outline" onClick={handlePrevStep}>
+                  <ArrowLeft className="w-4 h-4 mr-2" /> Back
                 </Button>
-                <Button type="submit" disabled={submittingInquiry}>
+              )}
+              {currentStep < steps.length - 1 ? (
+                <Button onClick={handleNextStep} className="ml-auto">
+                  Next <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              ) : (
+                <Button onClick={submitInquiry} disabled={submittingInquiry} className="ml-auto">
                   {submittingInquiry ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
                   Send Inquiry
                 </Button>
-              </div>
-            </form>
+              )}
+            </div>
+            <Button
+              variant="ghost"
+              onClick={() => setShowInquiryModal(false)}
+              className="mt-4 w-full text-gray-500 hover:text-gray-700"
+            >
+              Cancel
+            </Button>
           </div>
         </div>
       )}
